@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>聚会地点推荐工具</title>
+    <!-- 引入 Font Awesome CDN -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: "Microsoft Yahei", sans-serif;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 20px auto;
+            padding: 0 20px;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 20px;
+            color: #333;
+        }
+        .input-area {
+            background: #f5f5f5;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        .input-group {
+            margin-bottom: 15px;
+        }
+        .input-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #555;
+        }
+        .coord-input {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+        .coord-input input {
+            flex: 1;
+            padding: 8px 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.3s;
+        }
+        .btn-primary {
+            background: #0088ff;
+            color: white;
+        }
+        .btn-primary:hover {
+            background: #0066cc;
+        }
+        .btn-secondary {
+            background: #666;
+            color: white;
+            margin-left: 10px;
+        }
+        .btn-secondary:hover {
+            background: #444;
+        }
+        .coord-list {
+            margin-top: 10px;
+            padding: 10px;
+            background: white;
+            border-radius: 4px;
+            max-height: 150px;
+            overflow-y: auto;
+        }
+        .coord-item {
+            padding: 5px 0;
+            border-bottom: 1px dashed #eee;
+            display: flex;
+            justify-content: space-between;
+        }
+        .coord-item:last-child {
+            border-bottom: none;
+        }
+        .coord-item .delete-btn {
+            color: #ff4444;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        .map-area {
+            height: 500px;
+            border-radius: 8px;
+            overflow: hidden;
+            margin-bottom: 20px;
+        }
+        .result-area {
+            background: #e8f4fd;
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+        }
+        .result-area h3 {
+            color: #222;
+            margin-bottom: 10px;
+        }
+        .result-coord {
+            font-size: 18px;
+            font-weight: bold;
+            color: #0088ff;
+        }
+        /* Font Awesome 标记样式 */
+        .marker-icon {
+            font-size: 24px;
+            transform: translate(-50%, -100%); /* 居中并向上偏移，贴合地图点击位置 */
+        }
+        .marker-user { /* 用户选点图标样式 */
+            color: #FF6600; /* 橙色 */
+        }
+        .marker-meeting { /* 聚会点图标样式 */
+            color: #FF0000; /* 红色 */
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>聚会地点推荐工具</h1>
+            <p>输入/选择多个坐标，自动计算最优聚会地点</p>
+        </div>
+
+        <!-- 坐标输入区 -->
+        <div class="input-area">
+            <div class="input-group">
+                <label>手动输入坐标（经纬度，用逗号分隔）</label>
+                <div class="coord-input">
+                    <input type="text" id="coordInput" placeholder="例如：116.403874,39.914885">
+                    <button class="btn btn-primary" onclick="addCoordByInput()">添加坐标</button>
+                    <button class="btn btn-secondary" onclick="clearAllCoords()">清空所有</button>
+                </div>
+                <div class="coord-list" id="coordList">
+                    <!-- 坐标列表会动态生成 -->
+                </div>
+            </div>
+            <div class="input-group">
+                <label>地图选点：点击地图任意位置添加坐标</label>
+                <button class="btn btn-primary" onclick="calculateMeetingPoint()">计算聚会地点</button>
+            </div>
+        </div>
+
+        <!-- 地图展示区 -->
+        <div class="map-area" id="mapContainer"></div>
+
+        <!-- 结果展示区 -->
+        <div class="result-area">
+            <h3>最优聚会地点坐标</h3>
+            <div class="result-coord" id="resultCoord">未计算</div>
+        </div>
+    </div>
+
+    <!-- 引入高德地图API（需替换为自己的API Key） -->
+    <script type="text/javascript" src="https://webapi.amap.com/maps?v=2.0&key=bfd5663d98820f5385a400a829316988"></script>
+    <script>
+        // 全局变量
+        let map = null; // 地图实例
+        let coordList = []; // 存储所有输入的坐标
+        let markers = []; // 存储地图上的标记
+
+        // 初始化地图
+        function initMap() {
+            // 初始化高德地图，默认中心点为北京
+            map = new AMap.Map('mapContainer', {
+                zoom: 12, // 初始缩放级别
+                center: [116.403874, 39.914885] // 初始中心点坐标
+            });
+
+            // 监听地图点击事件，实现选点功能
+            map.on('click', function(e) {
+                const lng = e.lnglat.getLng().toFixed(6); // 经度，保留6位小数
+                const lat = e.lnglat.getLat().toFixed(6); // 纬度，保留6位小数
+                addCoord([lng, lat]); // 添加坐标到列表和地图
+            });
+        }
+
+        // 添加坐标（通用方法）
+        function addCoord(coord) {
+            // 验证坐标格式
+            if (!coord || coord.length !== 2 || isNaN(coord[0]) || isNaN(coord[1])) {
+                alert('坐标格式错误，请输入有效的经纬度！');
+                return;
+            }
+
+            const [lng, lat] = coord;
+            // 添加到坐标列表
+            coordList.push([Number(lng), Number(lat)]);
+            // 更新列表显示
+            updateCoordList();
+            // 在地图上添加Font Awesome标记（用户选点：用户图标）
+            addMarker([lng, lat], '用户选点', 'fas fa-user marker-icon marker-user');
+        }
+
+        // 通过输入框添加坐标
+        function addCoordByInput() {
+            const inputVal = document.getElementById('coordInput').value.trim();
+            if (!inputVal) {
+                alert('请输入坐标！');
+                return;
+            }
+            const coord = inputVal.split(',').map(item => item.trim());
+            addCoord(coord);
+            // 清空输入框
+            document.getElementById('coordInput').value = '';
+        }
+
+        // 更新坐标列表显示
+        function updateCoordList() {
+            const listEl = document.getElementById('coordList');
+            listEl.innerHTML = '';
+            coordList.forEach((coord, index) => {
+                const itemEl = document.createElement('div');
+                itemEl.className = 'coord-item';
+                itemEl.innerHTML = `
+                    <span>坐标${index+1}：${coord[0]}, ${coord[1]}</span>
+                    <span class="delete-btn" onclick="deleteCoord(${index})">删除</span>
+                `;
+                listEl.appendChild(itemEl);
+            });
+        }
+
+        // 删除指定坐标
+        function deleteCoord(index) {
+            // 删除列表中的坐标
+            coordList.splice(index, 1);
+            // 删除地图上对应的标记
+            if (markers[index]) {
+                markers[index].remove();
+                markers.splice(index, 1);
+            }
+            // 更新列表显示
+            updateCoordList();
+            // 清空结果
+            document.getElementById('resultCoord').textContent = '未计算';
+        }
+
+        // 核心修改：使用Font Awesome图标作为Marker
+        function addMarker(coord, title, iconClass) {
+            // 自定义Marker内容：嵌入Font Awesome图标
+            const marker = new AMap.Marker({
+                position: coord,
+                title: title,
+                // 关键：用content替代icon，自定义HTML显示Font Awesome图标
+                content: `<i class="${iconClass}"></i>`,
+                // 关闭默认的Marker阴影（可选）
+                shadow: false
+            });
+            marker.setMap(map);
+            markers.push(marker);
+            return marker;
+        }
+
+        // 计算聚会地点（算术平均值）
+        function calculateMeetingPoint() {
+            if (coordList.length === 0) {
+                alert('请先添加至少一个坐标！');
+                return;
+            }
+
+            // 计算所有坐标的经纬度平均值
+            let sumLng = 0, sumLat = 0;
+            coordList.forEach(coord => {
+                sumLng += coord[0];
+                sumLat += coord[1];
+            });
+            const avgLng = (sumLng / coordList.length).toFixed(6);
+            const avgLat = (sumLat / coordList.length).toFixed(6);
+            const meetingPoint = [avgLng, avgLat];
+
+            // 显示结果
+            document.getElementById('resultCoord').textContent = `${avgLng}, ${avgLat}`;
+
+            // 清除之前的聚会点标记（最后一个标记是聚会点）
+            if (markers.length > coordList.length) {
+                markers[markers.length - 1].remove();
+                markers.pop();
+            }
+
+            // 添加聚会点标记（聚会点：地图标记图标，红色）
+            addMarker(meetingPoint, '聚会地点', 'fas fa-map-marker-alt marker-icon marker-meeting');
+            // 地图居中到聚会点
+            map.setCenter(meetingPoint);
+            // 放大地图
+            map.setZoom(14);
+
+            // 弹出信息窗口
+            const infoWindow = new AMap.InfoWindow({
+                content: `<div style="padding: 10px;">
+                    <h4>最优聚会地点</h4>
+                    <p>坐标：${avgLng}, ${avgLat}</p>
+                </div>`,
+                offset: new AMap.Pixel(0, -30)
+            });
+            infoWindow.open(map, meetingPoint);
+        }
+
+        // 页面加载完成后初始化地图
+        window.onload = initMap;
+    </script>
+</body>
+</html>
