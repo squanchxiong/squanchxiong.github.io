@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>粒子科学计算器 ·  PixiJS +  Font Awesome</title>
+    <!-- Font Awesome 6 (免费) 用于图标 -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <!-- PixiJS 核心库 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pixi.js/7.2.4/pixi.min.js"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none; /* 禁止选中，提升按钮触感 */
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            font-family: 'Segoe UI', Roboto, system-ui, -apple-system, sans-serif;
+            min-height: 100vh;
+            background: #1a1a2e; /* 深色底色，衬托粒子 */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 12px;
+            position: relative;
+            overflow-x: hidden;
+        }
+
+        /* Pixi 画布容器 (背景层) */
+        #pixi-canvas-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+            pointer-events: none; /* 让点击穿透到计算器按钮 */
+        }
+
+        /* 计算器主面板 (位于粒子层上方) */
+        .calculator {
+            position: relative;
+            z-index: 10;
+            width: 100%;
+            max-width: 420px;  /* 手机端舒适宽度，大屏也不过分宽 */
+            background: rgba(20, 20, 35, 0.7);
+            backdrop-filter: blur(16px) saturate(180%);
+            -webkit-backdrop-filter: blur(16px) saturate(180%);
+            border-radius: 36px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5), inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+            padding: 20px 16px 24px;
+            transition: backdrop-filter 0.3s;
+            color: #f0f0ff;
+        }
+
+        /* 屏幕区域 */
+        .display-section {
+            margin-bottom: 20px;
+        }
+
+        .mode-toolbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+            padding: 0 4px;
+        }
+
+        .mode-switch {
+            display: flex;
+            gap: 10px;
+            background: rgba(255, 255, 255, 0.06);
+            padding: 4px;
+            border-radius: 40px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .mode-btn {
+            border: none;
+            background: transparent;
+            color: #a0a0c0;
+            font-size: 0.9rem;
+            font-weight: 500;
+            padding: 8px 18px;
+            border-radius: 32px;
+            transition: all 0.2s;
+            cursor: pointer;
+            letter-spacing: 0.5px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .mode-btn i {
+            font-size: 1rem;
+        }
+
+        .mode-btn.active {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        }
+
+        .history-icon {
+            color: #8a8ab0;
+            font-size: 1.2rem;
+            background: rgba(255,255,255,0.05);
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: default; /* 仅装饰，无功能 */
+        }
+
+        /* 输入框 */
+        .expression-box {
+            background: rgba(0, 0, 0, 0.35);
+            border-radius: 24px;
+            padding: 6px 18px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: inset 0 4px 10px rgba(0, 0, 0, 0.4);
+        }
+
+        #display {
+            width: 100%;
+            background: transparent;
+            border: none;
+            outline: none;
+            color: white;
+            font-size: 2.2rem;
+            font-weight: 300;
+            text-align: right;
+            line-height: 1.3;
+            padding: 8px 0;
+            font-family: 'Segoe UI', 'Courier New', monospace;
+            letter-spacing: 1px;
+        }
+
+        #display::placeholder {
+            color: rgba(255, 255, 255, 0.2);
+        }
+
+        /* 按钮网格容器 */
+        .buttons-grid {
+            display: grid;
+            gap: 10px;
+            transition: 0.2s;
+            margin-top: 10px;
+        }
+
+        /* 基本模式默认4列，科学模式通过js切换为5列 */
+        .buttons-grid.basic-mode {
+            grid-template-columns: repeat(4, 1fr);
+        }
+
+        .buttons-grid.scientific-mode {
+            grid-template-columns: repeat(5, 1fr);
+        }
+
+        /* 通用按钮样式 */
+        .calc-btn {
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 24px;
+            padding: 16px 4px;
+            font-size: 1.4rem;
+            font-weight: 400;
+            color: #f0f0ff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.1s ease;
+            cursor: pointer;
+            backdrop-filter: blur(5px);
+            box-shadow: 0 6px 10px rgba(0, 0, 0, 0.3);
+            aspect-ratio: 1 / 1;  /* 确保正正方方 */
+            min-width: 0;  /* 防止flex溢出 */
+            line-height: 1;
+        }
+
+        /* 功能按钮 (浅色调) */
+        .calc-btn.function {
+            background: rgba(180, 180, 240, 0.15);
+            color: #c2c2ff;
+            font-size: 1.2rem;
+            border-color: rgba(200, 200, 255, 0.1);
+        }
+
+        .calc-btn.operator {
+            background: rgba(255, 165, 0, 0.2);
+            color: #ffb347;
+            font-size: 1.6rem;
+            font-weight: 500;
+        }
+
+        .calc-btn.equals {
+            background: #4a6fa5;
+            color: white;
+            border: none;
+            box-shadow: 0 6px 0 #2c405c;
+            transform: translateY(-2px);
+        }
+
+        .calc-btn.equals:active {
+            transform: translateY(2px);
+            box-shadow: 0 2px 0 #2c405c;
+        }
+
+        .calc-btn:active {
+            background: rgba(255, 255, 255, 0.2);
+            transform: scale(0.96);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+        }
+
+        .calc-btn i {
+            font-size: 1.4rem;
+            filter: drop-shadow(0 2px 2px black);
+        }
+
+        /* 特殊按钮退格/清除的图标大小 */
+        .calc-btn i.fa-delete-left,
+        .calc-btn i.fa-xmark {
+            font-size: 1.6rem;
+        }
+
+        /* 针对科学模式长按钮 (如括号) 稍作调整 */
+        .calc-btn.scientific-txt {
+            font-size: 1.2rem;
+            font-weight: 500;
+        }
+
+        /* 确保等号在科学模式下仍然可辨识 */
+        .calc-btn.equals i {
+            font-size: 2rem;
+        }
+
+        /* 移动端优化：按钮内边距略小 */
+        @media (max-width: 400px) {
+            .calculator {
+                padding: 16px 12px 20px;
+            }
+            .calc-btn {
+                padding: 14px 2px;
+                font-size: 1.2rem;
+            }
+            .calc-btn.operator {
+                font-size: 1.4rem;
+            }
+            #display {
+                font-size: 1.8rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- PixiJS 画布插入点 -->
+    <div id="pixi-canvas-container"></div>
+
+    <!-- 计算器主体 -->
+    <div class="calculator">
+        <div class="display-section">
+            <div class="mode-toolbar">
+                <!-- 模式切换按钮组 -->
+                <div class="mode-switch">
+                    <button id="mode-basic" class="mode-btn active"><i class="fas fa-calculator"></i> 基本</button>
+                    <button id="mode-scientific" class="mode-btn"><i class="fas fa-flask"></i> 科学</button>
+                </div>
+                <div class="history-icon">
+                    <i class="fas fa-chart-line"></i>
+                </div>
+            </div>
+            <!-- 表达式输入框 (只读，通过按钮输入) -->
+            <div class="expression-box">
+                <input type="text" id="display" readonly placeholder="0" value="0">
+            </div>
+        </div>
+
+        <!-- 按钮动态渲染区域: 由js根据模式填充 -->
+        <div id="button-container" class="buttons-grid basic-mode"></div>
+    </div>
+
+    <script>
+        (function() {
+            // --- 初始化 PixiJS 粒子背景 ---
+            const app = new PIXI.Application({
+                backgroundAlpha: 0,      // 完全透明，露出body背景色，我们叠加颜色是为了更好看，粒子本身颜色鲜艳
+                resizeTo: window,
+                antialias: true,
+                eventMode: 'none'        // 忽略事件，让点击穿透
+            });
+
+            // 将canvas添加到容器中
+            const container = document.getElementById('pixi-canvas-container');
+            container.appendChild(app.view);
+
+            // 创建粒子容器
+            const particleContainer = new PIXI.Container();
+            app.stage.addChild(particleContainer);
+
+            // 粒子参数
+            const particleCount = 28;
+            const particles = [];
+            const colors = [0xff9ff3, 0xfeca57, 0xff6f61, 0x48dbfb, 0x1dd1a1, 0x5f27cd, 0xff9f43, 0x00d2d3];
+
+            // 生成粒子 (小圆形)
+            for (let i = 0; i < particleCount; i++) {
+                const radius = Math.random() * 6 + 3; // 3~9
+                const graphics = new PIXI.Graphics();
+                const color = colors[Math.floor(Math.random() * colors.length)];
+                graphics.beginFill(color, Math.random() * 0.5 + 0.3); // 透明度0.3~0.8
+                graphics.drawCircle(0, 0, radius);
+                graphics.endFill();
+
+                // 随机初始位置
+                const x = Math.random() * app.screen.width;
+                const y = Math.random() * app.screen.height;
+                graphics.x = x;
+                graphics.y = y;
+
+                particleContainer.addChild(graphics);
+
+                // 存储速度及自增参数
+                particles.push({
+                    graphic: graphics,
+                    vx: (Math.random() - 0.5) * 0.6,
+                    vy: (Math.random() - 0.5) * 0.6,
+                    baseRadius: radius,
+                });
+            }
+
+            // 动画更新
+            app.ticker.add(() => {
+                const boundsWidth = app.screen.width;
+                const boundsHeight = app.screen.height;
+
+                particles.forEach(p => {
+                    p.graphic.x += p.vx;
+                    p.graphic.y += p.vy;
+
+                    // 边界反弹 (留点边缘)
+                    if (p.graphic.x < 0 || p.graphic.x > boundsWidth) {
+                        p.vx *= -1;
+                        p.graphic.x = Math.min(boundsWidth, Math.max(0, p.graphic.x));
+                    }
+                    if (p.graphic.y < 0 || p.graphic.y > boundsHeight) {
+                        p.vy *= -1;
+                        p.graphic.y = Math.min(boundsHeight, Math.max(0, p.graphic.y));
+                    }
+
+                    // 轻微呼吸效果：半径微变 (可选)
+                    // 这里略，保持简单
+                });
+            });
+
+            // --- 计算器逻辑 ---
+            const display = document.getElementById('display');
+            const buttonContainer = document.getElementById('button-container');
+            const modeBasicBtn = document.getElementById('mode-basic');
+            const modeScientificBtn = document.getElementById('mode-scientific');
+
+            // 当前模式: 'basic' 或 'scientific'
+            let currentMode = 'basic';
+
+            // 定义按钮数据
+            // 每个按钮: { text: 显示文本, value: 插入值/动作标识, type: 额外类 (如 'operator', 'function', 'equals'), icon: 可选图标类 }
+            // 基本模式按钮 (4列)
+            const basicButtons = [
+                { text: 'C', value: 'clear', type: 'function' },
+                { text: '<i class="fa-solid fa-delete-left"></i>', value: 'backspace', type: 'function', html: true },
+                { text: '(', value: '(', type: '' },
+                { text: ')', value: ')', type: '' },
+                { text: '7', value: '7', type: '' },
+                { text: '8', value: '8', type: '' },
+                { text: '9', value: '9', type: '' },
+                { text: '÷', value: '/', type: 'operator' },
+                { text: '4', value: '4', type: '' },
+                { text: '5', value: '5', type: '' },
+                { text: '6', value: '6', type: '' },
+                { text: '×', value: '*', type: 'operator' },
+                { text: '1', value: '1', type: '' },
+                { text: '2', value: '2', type: '' },
+                { text: '3', value: '3', type: '' },
+                { text: '−', value: '-', type: 'operator' },
+                { text: '0', value: '0', type: '' },
+                { text: '.', value: '.', type: '' },
+                { text: '=', value: 'equals', type: 'equals', icon: 'fa-solid fa-equals' },
+                { text: '+', value: '+', type: 'operator' },
+            ];
+
+            // 科学模式按钮 (5列) 包含基本运算+科学函数
+            const scientificButtons = [
+                // 第一行 科学函数
+                { text: 'sin', value: 'sin(', type: 'function scientific-txt' },
+                { text: 'cos', value: 'cos(', type: 'function scientific-txt' },
+                { text: 'tan', value: 'tan(', type: 'function scientific-txt' },
+                { text: 'ln', value: 'ln(', type: 'function scientific-txt' },
+                { text: 'log', value: 'log(', type: 'function scientific-txt' },
+                // 第二行
+                { text: 'asin', value: 'asin(', type: 'function scientific-txt' },
+                { text: 'acos', value: 'acos(', type: 'function scientific-txt' },
+                { text: 'atan', value: 'atan(', type: 'function scientific-txt' },
+                { text: '√', value: 'sqrt(', type: 'function' },
+                { text: '^', value: '^', type: 'operator' },
+                // 第三行 常数和括号
+                { text: 'π', value: 'π', type: 'function' },
+                { text: 'e', value: 'e', type: 'function' },
+                { text: '(', value: '(', type: '' },
+                { text: ')', value: ')', type: '' },
+                { text: 'C', value: 'clear', type: 'function' },
+                // 第四行开始基本数字与运算符 (需要平衡)
+                { text: '←', value: 'backspace', type: 'function', icon: 'fa-solid fa-delete-left' },
+                { text: '7', value: '7', type: '' },
+                { text: '8', value: '8', type: '' },
+                { text: '9', value: '9', type: '' },
+                { text: '÷', value: '/', type: 'operator' },
+                // 第五行
+                { text: '4', value: '4', type: '' },
+                { text: '5', value: '5', type: '' },
+                { text: '6', value: '6', type: '' },
+                { text: '×', value: '*', type: 'operator' },
+                { text: '−', value: '-', type: 'operator' },
+                // 第六行
+                { text: '1', value: '1', type: '' },
+                { text: '2', value: '2', type: '' },
+                { text: '3', value: '3', type: '' },
+                { text: '+', value: '+', type: 'operator' },
+                { text: '=', value: 'equals', type: 'equals', icon: 'fa-solid fa-equals' },
+                // 第七行 补零和小数点
+                { text: '0', value: '0', type: '' },
+                { text: '.', value: '.', type: '' },
+                // 剩余两个空格用空占位? 但为了整齐，插入两个不可见占位？不好，我们可以调整，但让0和.跨列？为了简单，我们填充两个空白不可点击的占位符。
+                { text: '', value: 'placeholder', type: 'placeholder', disabled: true },
+                { text: '', value: 'placeholder', type: 'placeholder', disabled: true },
+            ];
+
+            // 渲染按钮
+            function renderButtons(mode) {
+                const buttonsData = mode === 'basic' ? basicButtons : scientificButtons;
+                // 清空容器
+                buttonContainer.innerHTML = '';
+                // 设置grid class
+                buttonContainer.className = `buttons-grid ${mode === 'basic' ? 'basic-mode' : 'scientific-mode'}`;
+
+                buttonsData.forEach(btn => {
+                    const button = document.createElement('button');
+                    button.className = 'calc-btn';
+                    if (btn.type) {
+                        btn.type.split(' ').forEach(cls => {
+                            if (cls) button.classList.add(cls);
+                        });
+                    }
+                    // 占位按钮无事件且透明
+                    if (btn.disabled || btn.value === 'placeholder') {
+                        button.style.visibility = 'hidden';
+                        button.style.pointerEvents = 'none';
+                    }
+
+                    // 设置内容：可能是HTML图标或纯文本
+                    if (btn.icon) {
+                        button.innerHTML = `<i class="fas ${btn.icon}"></i>`;
+                    } else if (btn.html) {
+                        button.innerHTML = btn.text;  // 直接HTML（如退格图标）
+                    } else {
+                        button.textContent = btn.text;
+                    }
+
+                    // 存储value
+                    button.dataset.value = btn.value;
+
+                    // 附加属性：若value以 '(' 或 ')' 或数字等，保持
+                    buttonContainer.appendChild(button);
+                });
+            }
+
+            // 初始渲染
+            renderButtons('basic');
+
+            // 模式切换
+            modeBasicBtn.addEventListener('click', () => {
+                if (currentMode === 'basic') return;
+                currentMode = 'basic';
+                modeBasicBtn.classList.add('active');
+                modeScientificBtn.classList.remove('active');
+                renderButtons('basic');
+            });
+
+            modeScientificBtn.addEventListener('click', () => {
+                if (currentMode === 'scientific') return;
+                currentMode = 'scientific';
+                modeScientificBtn.classList.add('active');
+                modeBasicBtn.classList.remove('active');
+                renderButtons('scientific');
+            });
+
+            // 显示辅助：更新input的值
+            function setDisplayValue(val) {
+                display.value = val;
+            }
+
+            function getDisplayValue() {
+                return display.value;
+            }
+
+            // 清屏
+            function clearDisplay() {
+                setDisplayValue('0');
+            }
+
+            // 退格
+            function backspace() {
+                let current = getDisplayValue();
+                if (current === '0' || current.length === 1) {
+                    setDisplayValue('0');
+                } else {
+                    setDisplayValue(current.slice(0, -1));
+                }
+            }
+
+            // 处理字符追加
+            function appendToDisplay(char) {
+                let current = getDisplayValue();
+                // 如果当前为'0'且追加的不是运算符或函数（避免以运算符开头，但允许负号？简单处理：如果当前为0且追加数字或小数点，替换）
+                if (current === '0') {
+                    if (char === '.' || char === '(' || /[0-9]/.test(char)) {
+                        setDisplayValue(char);
+                        return;
+                    } else {
+                        // 运算符或函数等，保留0然后追加
+                        setDisplayValue(current + char);
+                    }
+                } else {
+                    setDisplayValue(current + char);
+                }
+            }
+
+            // 预处理并计算表达式
+            function calculate() {
+                let expr = getDisplayValue();
+                if (!expr || expr === '0') return;
+
+                try {
+                    // 预处理步骤：
+                    // 1. 替换常数 π 和 e
+                    expr = expr.replace(/π/g, 'Math.PI').replace(/e(?![a-z])/g, 'Math.E'); // 避免替换字母e开头的函数名，但函数名为sin等，所以e单独替换为Math.E是安全的
+                    
+                    // 2. 替换函数名为 Math. 形式
+                    const funcMap = [
+                        ['sin', 'Math.sin'],
+                        ['cos', 'Math.cos'],
+                        ['tan', 'Math.tan'],
+                        ['asin', 'Math.asin'],
+                        ['acos', 'Math.acos'],
+                        ['atan', 'Math.atan'],
+                        ['ln', 'Math.log'],      // 自然对数
+                        ['log', 'Math.log10'],    // 常用对数
+                        ['sqrt', 'Math.sqrt']
+                    ];
+                    funcMap.forEach(([oldFn, newFn]) => {
+                        // 全局替换 函数名+左括号，避免替换部分标识符
+                        const regex = new RegExp(oldFn + '\\(', 'g');
+                        expr = expr.replace(regex, newFn + '(');
+                    });
+
+                    // 3. 替换幂运算符 ^ 为 **
+                    expr = expr.replace(/\^/g, '**');
+
+                    // 4. 处理可能多余的符号，但保持简单
+                    // 使用eval计算，注意安全：expr只包含数字、Math、运算符和括号
+                    // 额外过滤：禁止出现恶意代码，但函数都由按钮产生，相对安全
+                    // 出于谨慎，可以检查是否只包含允许的字符：数字 运算符 . ( ) Math 字母，但我们信任输入。
+                    
+                    // 使用 Function 替代 eval 获得更严格的作用域 (其实一样)
+                    const calculateFn = new Function(`return (${expr})`);
+                    const result = calculateFn();
+
+                    // 处理结果浮点数精度
+                    let resultStr;
+                    if (Number.isFinite(result)) {
+                        // 保留10位小数，去除末尾零
+                        resultStr = parseFloat(result.toFixed(10)).toString();
+                    } else {
+                        resultStr = '错误';
+                    }
+                    setDisplayValue(resultStr);
+                } catch (e) {
+                    console.warn('计算错误:', e);
+                    setDisplayValue('语法错误');
+                }
+            }
+
+            // 全局按钮点击事件委托 (通过buttonContainer)
+            buttonContainer.addEventListener('click', (e) => {
+                const btn = e.target.closest('.calc-btn');
+                if (!btn) return;
+                const value = btn.dataset.value;
+                if (!value || value === 'placeholder') return;
+
+                // 处理特殊动作
+                switch (value) {
+                    case 'clear':
+                        clearDisplay();
+                        break;
+                    case 'backspace':
+                        backspace();
+                        break;
+                    case 'equals':
+                        calculate();
+                        break;
+                    default:
+                        // 追加字符
+                        appendToDisplay(value);
+                        break;
+                }
+            });
+
+            // 避免移动端键盘弹出 (已经readonly)
+            display.addEventListener('focus', (e) => {
+                e.target.blur();  // 立即失去焦点，防止键盘
+            });
+
+            // 初始化显示为0
+            clearDisplay();
+
+            // 调整Pixi画布大小 (resizeTo已经做，但有时需要手动)
+            window.addEventListener('resize', () => {
+                app.resize();
+            });
+
+            // 增加一点触摸优化
+            document.body.addEventListener('touchmove', (e) => {
+                // 防止页面滚动时误触，但不禁用滚动 (保留)
+            }, { passive: false });
+
+            // 额外: 在科学模式下可能某些按钮文本过长，调整字体
+            // 使用动态类已处理
+        })();
+    </script>
+</body>
+</html>
