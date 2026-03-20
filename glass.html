@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>雨窗 · 柔边水滴</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            min-height: 100vh;
+            background: #10171f;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* 极简外框 — 无文字 */
+        .window-frame {
+            padding: 12px;
+            background: rgba(0, 0, 0, 0.3);
+            backdrop-filter: blur(4px);
+            border-radius: 36px;
+            box-shadow: 0 20px 30px -15px black;
+        }
+
+        /* 窗户容器 */
+        .window {
+            position: relative;
+            width: 800px;
+            height: 530px;
+            border-radius: 24px;
+            overflow: hidden;
+            box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.08) inset,
+                        0 12px 28px rgba(0, 0, 0, 0.8);
+        }
+
+        /* 唯一图片元素 */
+        .window img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+            pointer-events: none;
+            user-select: none;
+        }
+
+        /* 水珠层 */
+        .droplet-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 20;
+            pointer-events: none;
+            overflow: hidden;
+        }
+
+        /* 水滴样式 — 暗调无高光 + 边缘高斯模糊 */
+        .droplet {
+            position: absolute;
+            top: -10%;
+            left: 0;
+            width: 12px;
+            height: 18px;
+            border-radius: 60% 40% 50% 50% / 45% 55% 45% 55%;
+            /* 深色渐变：无白色，全灰蓝低饱和度 */
+            background: radial-gradient(circle at 30% 28%, 
+                rgba(80, 95, 110, 0.55) 5%,
+                rgba(55, 70, 85, 0.35) 40%,
+                rgba(40, 52, 65, 0.25) 70%,
+                transparent 96%);
+            /* 阴影去掉高光反射，仅保留深邃轮廓 */
+            box-shadow: 
+                0 6px 10px -6px rgba(0, 0, 0, 0.5),
+                inset 0 1px 2px rgba(0, 0, 0, 0.2),
+                inset -1px -1px 3px rgba(0, 0, 0, 0.3);
+            transform-origin: center center;
+            will-change: transform, top, opacity;
+            opacity: 0;
+            animation-fill-mode: forwards;
+            animation-iteration-count: infinite;
+            backdrop-filter: blur(2.5px) brightness(0.85) contrast(1.02);
+            /* ===== 边缘高斯模糊 ===== */
+            filter: blur(1.2px);
+            /* 无任何白色高光伪元素 */
+        }
+
+        /* 彻底移除原先的白色高光伪元素 */
+        .droplet::after {
+            display: none;
+        }
+
+        /* ========= 三种下落动画 (无左右晃动) ========= */
+
+        /* 1. 垂直下落 */
+        @keyframes dropVertical {
+            0% { top: -10%; transform: translateX(0) scale(1); opacity: 0; }
+            6% { opacity: 0.7; }
+            25% { transform: scale(1.01, 0.98); }
+            50% { transform: scale(0.99, 1.01); }
+            75% { transform: scale(0.98, 1.02); opacity: 0.65; }
+            100% { top: 110%; transform: translateX(0) scale(1); opacity: 0; }
+        }
+
+        /* 2. 左斜下落 (单向) */
+        @keyframes dropDiagonalLeft {
+            0% { top: -10%; transform: translateX(0) scale(1); opacity: 0; }
+            7% { opacity: 0.75; }
+            100% { top: 110%; transform: translateX(-42px) scale(1); opacity: 0; }
+        }
+        /* 右斜下落 (单向) */
+        @keyframes dropDiagonalRight {
+            0% { top: -10%; transform: translateX(0) scale(1); opacity: 0; }
+            7% { opacity: 0.75; }
+            100% { top: 110%; transform: translateX(42px) scale(1); opacity: 0; }
+        }
+
+        /* 3. 有弧度的下落 (轻微抛物线，单向无来回) */
+        @keyframes dropCurvedLeft {
+            0% { top: -10%; transform: translateX(0) scale(1); opacity: 0; }
+            12% { opacity: 0.8; }
+            35% { transform: translateX(-16px) translateY(18px) scale(1.01, 0.97); }
+            65% { transform: translateX(-38px) translateY(55px) scale(0.97, 1.03); }
+            100% { top: 110%; transform: translateX(-50px) translateY(0) scale(1); opacity: 0; }
+        }
+        @keyframes dropCurvedRight {
+            0% { top: -10%; transform: translateX(0) scale(1); opacity: 0; }
+            12% { opacity: 0.8; }
+            35% { transform: translateX(16px) translateY(18px) scale(1.01, 0.97); }
+            65% { transform: translateX(38px) translateY(55px) scale(0.97, 1.03); }
+            100% { top: 110%; transform: translateX(50px) translateY(0) scale(1); opacity: 0; }
+        }
+
+        /* 确保没有任何文字 */
+    </style>
+</head>
+<body>
+<div class="window-frame">
+    <div class="window" id="glassWindow">
+        <img src="https://search-operate.cdn.bcebos.com/9669cac22a5833622982ecfdf38f4694.png" 
+             alt="窗户玻璃纹理">
+        <div class="droplet-layer" id="dropletLayer"></div>
+    </div>
+</div>
+
+<script>
+    (function() {
+        const layer = document.getElementById('dropletLayer');
+        layer.innerHTML = '';   // 清空
+
+        // 水珠数量：更密集 —— 主水滴 + 细微水滴
+        const MAIN_DROPLETS = 78;    // 主要水滴
+        const MICRO_DROPLETS = 28;   // 细小水滴
+        const EXTRA_DENSE = 12;      // 额外密集补充
+
+        // 五种动画类型 (垂直 / 斜向左右 / 弧形左右)
+        const dropAnimations = [
+            'dropVertical',         // 垂直
+            'dropDiagonalLeft',     // 左斜
+            'dropDiagonalRight',    // 右斜
+            'dropCurvedLeft',       // 左弧
+            'dropCurvedRight'       // 右弧
+        ];
+
+        // 生成主要水珠 (78颗)
+        for (let i = 0; i < MAIN_DROPLETS; i++) {
+            const droplet = document.createElement('div');
+            droplet.className = 'droplet';
+
+            // 水平位置 2% ~ 98%
+            const leftPos = 2 + Math.random() * 96;
+            droplet.style.left = leftPos + '%';
+
+            // 宽度范围 5~21px
+            const baseWidth = 5 + Math.random() * 16;  // 5~21px
+            // 高度因子 1.0 ~ 1.75 (短款)
+            const heightFactor = 1.0 + Math.random() * 0.75;
+            const dropletHeight = baseWidth * heightFactor;
+
+            droplet.style.width = baseWidth + 'px';
+            droplet.style.height = dropletHeight + 'px';
+
+            // 不规则水滴形状
+            const r1 = 35 + Math.random() * 48;
+            const r2 = 32 + Math.random() * 52;
+            const r3 = 30 + Math.random() * 54;
+            const r4 = 34 + Math.random() * 50;
+            const r5 = 42 + Math.random() * 44;
+            const r6 = 40 + Math.random() * 46;
+            const r7 = 38 + Math.random() * 48;
+            const r8 = 44 + Math.random() * 42;
+            droplet.style.borderRadius = `${r1}% ${r2}% ${r3}% ${r4}% / ${r5}% ${r6}% ${r7}% ${r8}%`;
+
+            // 深色径向渐变，无白色高光
+            const gradX = 20 + Math.random() * 35;
+            const gradY = 18 + Math.random() * 30;
+            droplet.style.background = `radial-gradient(circle at ${gradX}% ${gradY}%, 
+                rgba(70, 88, 105, 0.6) 4%,
+                rgba(50, 68, 85, 0.4) 30%,
+                rgba(35, 48, 62, 0.25) 65%,
+                transparent 94%)`;
+
+            // 阴影只用暗色系
+            const shadowSize = 4 + Math.random() * 7;
+            droplet.style.boxShadow = `0 ${shadowSize}px ${shadowSize * 1.1}px -7px rgba(0, 0, 0, 0.55), 
+                inset 0 1px 1px rgba(0, 0, 0, 0.25),
+                inset -1px -2px 4px rgba(0, 0, 0, 0.35)`;
+
+            // 折射滤镜 + 亮度压低
+            droplet.style.backdropFilter = `blur(${2 + Math.random() * 2}px) brightness(0.82) contrast(1.0)`;
+
+            // 随机动画类型
+            const animType = Math.floor(Math.random() * dropAnimations.length);
+            const animName = dropAnimations[animType];
+            
+            // 时长 3.2s ~ 9s，延迟 0~7.5s
+            const duration = 3.2 + Math.random() * 5.8;
+            const delay = Math.random() * 7.5;
+
+            droplet.style.animation = `${animName} ${duration}s ease-in-out ${delay}s infinite`;
+
+            layer.appendChild(droplet);
+        }
+
+        // 生成细微水滴 (28颗)
+        for (let i = 0; i < MICRO_DROPLETS; i++) {
+            const micro = document.createElement('div');
+            micro.className = 'droplet';
+            
+            const leftPos = 1.5 + Math.random() * 97;
+            micro.style.left = leftPos + '%';
+            
+            const tinySize = 3 + Math.random() * 6;   // 3~9px
+            micro.style.width = tinySize + 'px';
+            const heightFactor = 1.0 + Math.random() * 0.7;
+            micro.style.height = tinySize * heightFactor + 'px';
+            
+            micro.style.background = `radial-gradient(circle at 30% 35%, 
+                rgba(65, 82, 98, 0.55) 5%,
+                rgba(45, 60, 76, 0.35) 45%,
+                rgba(30, 42, 55, 0.22) 75%,
+                transparent 95%)`;
+                
+            micro.style.boxShadow = `0 4px 7px -5px rgba(0, 0, 0, 0.5),
+                inset 0 0 2px rgba(0, 0, 0, 0.2)`;
+            micro.style.backdropFilter = `blur(1.8px) brightness(0.85)`;
+            
+            const animType = Math.floor(Math.random() * dropAnimations.length);
+            const duration = 2.5 + Math.random() * 5.2;
+            const delay = Math.random() * 8;
+            micro.style.animation = `${dropAnimations[animType]} ${duration}s ease-in-out ${delay}s infinite`;
+            
+            layer.appendChild(micro);
+        }
+
+        // 额外增加水滴 (12颗) 进一步加密
+        for (let i = 0; i < EXTRA_DENSE; i++) {
+            const extra = document.createElement('div');
+            extra.className = 'droplet';
+            extra.style.left = (2 + Math.random() * 96) + '%';
+            const w = 4 + Math.random() * 14;
+            extra.style.width = w + 'px';
+            extra.style.height = w * (1.0 + Math.random() * 0.8) + 'px';
+            
+            extra.style.background = `radial-gradient(circle at 25% 30%, 
+                rgba(68, 86, 102, 0.58) 4%,
+                rgba(48, 66, 82, 0.38) 38%,
+                rgba(32, 45, 59, 0.24) 70%,
+                transparent 96%)`;
+            extra.style.boxShadow = `0 5px 9px -6px rgba(0,0,0,0.55), inset 0 0 2px rgba(0,0,0,0.25)`;
+            extra.style.backdropFilter = `blur(2px) brightness(0.84)`;
+            
+            const animType = Math.floor(Math.random() * dropAnimations.length);
+            const duration = 3 + Math.random() * 6;
+            const delay = Math.random() * 7;
+            extra.style.animation = `${dropAnimations[animType]} ${duration}s ease-in-out ${delay}s infinite`;
+            layer.appendChild(extra);
+        }
+    })();
+</script>
+</body>
+</html>
