@@ -115,6 +115,12 @@ html,body{height:100%;overflow:hidden;background:#080418;
 .flash{position:absolute;inset:0;background:radial-gradient(circle at 50% 46%,
   rgba(255,215,90,.5),rgba(255,150,0,0) 62%);animation:flashOut .8s ease-out forwards}
 @keyframes flashOut{from{opacity:1}to{opacity:0}}
+
+/* ---------- 加载遮罩 ---------- */
+#loader{position:fixed;inset:0;z-index:300;display:flex;align-items:center;justify-content:center;
+  background:radial-gradient(ellipse at 50% 42%, #2a1a55 0%, #150c2e 45%, #080418 100%);
+  color:#ffd75e;font-size:15px;letter-spacing:2px;line-height:2;text-align:center;padding:24px}
+#loader.hide{display:none}
 </style>
 </head>
 <body>
@@ -152,7 +158,7 @@ html,body{height:100%;overflow:hidden;background:#080418;
     <div class="modal-box">
       <h1>幸运老虎机</h1>
       <div class="sub">请输入你的总金额，开始游戏</div>
-      <input id="amountInput" type="number" inputmode="numeric" pattern="[0-9]*" value="1000" placeholder="总金额">
+      <input id="amountInput" type="tel" inputmode="numeric" pattern="[0-9]*" value="1000" placeholder="总金额">
       <div class="quick-row">
         <button data-v="500">500</button>
         <button data-v="1000">1000</button>
@@ -162,21 +168,13 @@ html,body{height:100%;overflow:hidden;background:#080418;
       <button id="startBtn">开 始 游 戏</button>
     </div>
   </div>
+
+  <div id="loader">正在加载 3D 引擎…</div>
 </div>
 
-<script type="importmap">
-{
-  "imports": {
-    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"
-  }
-}
-</script>
-
 <script type="module">
-import * as THREE from 'three';
-
 /* ==================================================================
-   1. 符号配置 & 概率
+   0. 基础配置与状态（不依赖 THREE）
    ================================================================== */
 const SYMBOLS = [
   { name:'樱桃', mult:3,  weight:30 },
@@ -205,9 +203,6 @@ const LAYOUTS = [
   [3,5,1,6,4,0,2],
 ];
 
-/* ==================================================================
-   2. 游戏状态
-   ================================================================== */
 const BET_STEPS = [10,20,50,100,200,500,1000,2000,5000,10000];
 
 const state = {
@@ -219,7 +214,7 @@ const state = {
 };
 
 /* ==================================================================
-   3. 音效（Web Audio 合成，无外部资源）
+   1. 音效（Web Audio 合成）
    ================================================================== */
 const sfx = {
   enabled: true,
@@ -230,11 +225,13 @@ const sfx = {
     if (this.ctx) { this.resume(); return; }
     const AC = window.AudioContext || window.webkitAudioContext;
     if (!AC) return;
-    this.ctx = new AC();
-    this.master = this.ctx.createGain();
-    this.master.gain.value = 0.6;
-    this.master.connect(this.ctx.destination);
-    this.resume();
+    try {
+      this.ctx = new AC();
+      this.master = this.ctx.createGain();
+      this.master.gain.value = 0.6;
+      this.master.connect(this.ctx.destination);
+      this.resume();
+    } catch(e){}
   },
 
   resume(){
@@ -293,7 +290,7 @@ const sfx = {
 };
 
 /* ==================================================================
-   4. 震动
+   2. 震动
    ================================================================== */
 const haptics = {
   enabled: true,
@@ -305,8 +302,111 @@ const haptics = {
 };
 
 /* ==================================================================
-   5. Three.js 场景
+   3. DOM 引用
    ================================================================== */
+const el = {
+  balance: document.getElementById('balanceVal'),
+  bet: document.getElementById('betVal'),
+  spinBtn: document.getElementById('spinBtn'),
+  betUp: document.getElementById('betUp'),
+  betDown: document.getElementById('betDown'),
+  soundBtn: document.getElementById('soundBtn'),
+  vibBtn: document.getElementById('vibBtn'),
+  modal: document.getElementById('modal'),
+  amountInput: document.getElementById('amountInput'),
+  startBtn: document.getElementById('startBtn'),
+  fx: document.getElementById('fx'),
+  toast: document.getElementById('toast'),
+  loader: document.getElementById('loader'),
+};
+
+/* ==================================================================
+   4. 通用 UI 工具
+   ================================================================== */
+function fmt(n){
+  return Math.round(n).toLocaleString('en-US');
+}
+
+function updateUI(){
+  el.balance.textContent = fmt(state.balance);
+  el.bet.textContent = fmt(state.bet);
+
+  const cantSpin = state.spinning || state.balance < state.bet || !state.started;
+  el.spinBtn.classList.toggle('disabled', cantSpin);
+  el.spinBtn.textContent = state.spinning ? '转 动 中' : '摇';
+
+  el.betUp.disabled = state.spinning;
+  el.betDown.disabled = state.spinning;
+}
+
+let toastTimer = null;
+function toast(msg){
+  el.toast.textContent = msg;
+  el.toast.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.toast.classList.remove('show'), 1500);
+}
+
+function showWin(text, big){
+  const d = document.createElement('div');
+  d.className = 'win-text' + (big ? ' big' : '');
+  d.textContent = text;
+  el.fx.appendChild(d);
+  setTimeout(() => d.remove(), 1800);
+}
+
+function flashScreen(){
+  const d = document.createElement('div');
+  d.className = 'flash';
+  el.fx.appendChild(d);
+  setTimeout(() => d.remove(), 900);
+}
+
+function openStartModal(){
+  el.modal.classList.remove('hidden');
+  el.startBtn.textContent = '开 始 游 戏';
+  state.started = false;
+  updateUI();
+}
+
+/* 兼容微信的点击绑定：touchstart 立即响应，click 去重 */
+function bindTap(element, handler){
+  let lastTouch = 0;
+  element.addEventListener('touchstart', (e) => {
+    lastTouch = Date.now();
+    handler(e);
+  }, { passive: true });
+  element.addEventListener('click', (e) => {
+    if (Date.now() - lastTouch < 500) return;
+    handler(e);
+  });
+}
+
+/* ==================================================================
+   5. 主程序：动态加载 THREE 后启动
+   ================================================================== */
+const THREE_CDN = [
+  'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js',
+  'https://unpkg.com/three@0.160.0/build/three.module.js',
+  'https://esm.sh/three@0.160.0'
+];
+
+function loadThree(i = 0){
+  if (i >= THREE_CDN.length){
+    el.loader.innerHTML = '3D 引擎加载失败<br><span style="font-size:13px;color:#9d8fd0">请检查网络后刷新页面重试</span>';
+    return;
+  }
+  import(THREE_CDN[i])
+    .then(mod => main(mod))
+    .catch(() => loadThree(i + 1));
+}
+
+loadThree();
+
+/* ---------- 主程序 ---------- */
+function main(THREE){
+
+/* ---- 5.1 场景参数 ---- */
 const CFG = {
   reelCount: 3,
   symPerReel: 7,
@@ -314,13 +414,14 @@ const CFG = {
   reelSpacing: 1.42,
   planeW: 1.35,
 };
-CFG.planeH = 2 * CFG.reelRadius * Math.sin(Math.PI / CFG.symPerReel); // ≈1.041
+CFG.planeH = 2 * CFG.reelRadius * Math.sin(Math.PI / CFG.symPerReel);
 
 let renderer, scene, camera;
 const reelGroups = [];
 let spinAnim = null;
+let rafId = null;
 
-/* ---------- 绘图工具 ---------- */
+/* ---- 5.2 绘图工具 ---- */
 function roundRect(ctx, x, y, w, h, r){
   ctx.beginPath();
   ctx.moveTo(x + r, y);
@@ -331,7 +432,6 @@ function roundRect(ctx, x, y, w, h, r){
   ctx.closePath();
 }
 
-/* ---------- 画符号 ---------- */
 function drawSymbol(ctx, type, cx, cy, s){
   ctx.save();
   ctx.translate(cx, cy);
@@ -481,7 +581,7 @@ function drawSymbol(ctx, type, cx, cy, s){
     g.addColorStop(0, '#ff5a5a');
     g.addColorStop(0.5, '#e02020');
     g.addColorStop(1, '#8a0a0a');
-    ctx.font = `bold ${u * 1.75}px "Arial Black", Arial, sans-serif`;
+    ctx.font = 'bold ' + (u * 1.75) + 'px "Arial Black", Arial, sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.lineWidth = u * 0.2;
@@ -494,7 +594,6 @@ function drawSymbol(ctx, type, cx, cy, s){
   ctx.restore();
 }
 
-/* ---------- 生成符号卡片纹理 ---------- */
 function makeSymbolTexture(type){
   const W = 260, H = 200;
   const cv = document.createElement('canvas');
@@ -528,7 +627,6 @@ function makeSymbolTexture(type){
   return cv;
 }
 
-/* ---------- 生成机箱面板纹理 ---------- */
 function makePanelTexture(){
   const W = 520, H = 340;
   const cv = document.createElement('canvas');
@@ -560,7 +658,7 @@ function makePanelTexture(){
   return cv;
 }
 
-/* ---------- 初始化 Three.js ---------- */
+/* ---- 5.3 初始化 Three ---- */
 function initThree(){
   const canvas = document.getElementById('scene');
   renderer = new THREE.WebGLRenderer({
@@ -568,6 +666,7 @@ function initThree(){
   });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
   renderer.setSize(window.innerWidth, window.innerHeight, false);
+  if ('outputColorSpace' in renderer) renderer.outputColorSpace = THREE.SRGBColorSpace;
 
   scene = new THREE.Scene();
   camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 200);
@@ -575,7 +674,7 @@ function initThree(){
   const maxAniso = renderer.capabilities.getMaxAnisotropy();
   const textures = SYMBOLS.map((_, i) => {
     const tex = new THREE.CanvasTexture(makeSymbolTexture(i));
-    tex.colorSpace = THREE.SRGBColorSpace;
+    if ('colorSpace' in tex) tex.colorSpace = THREE.SRGBColorSpace;
     tex.anisotropy = maxAniso;
     tex.needsUpdate = true;
     return tex;
@@ -607,7 +706,7 @@ function initThree(){
 
   // 机箱面板
   const panelTex = new THREE.CanvasTexture(makePanelTexture());
-  panelTex.colorSpace = THREE.SRGBColorSpace;
+  if ('colorSpace' in panelTex) panelTex.colorSpace = THREE.SRGBColorSpace;
   const panel = new THREE.Mesh(
     new THREE.PlaneGeometry(5.2, 3.4),
     new THREE.MeshBasicMaterial({ map: panelTex, transparent: true, depthWrite: false })
@@ -650,12 +749,9 @@ function updateCamera(){
   camera.updateProjectionMatrix();
 }
 
-/* ==================================================================
-   6. 渲染循环
-   ================================================================== */
+/* ---- 5.4 渲染循环 ---- */
 function easeOut(t){ return 1 - Math.pow(1 - t, 2.5); }
 
-let rafId = null;
 function loop(now){
   rafId = requestAnimationFrame(loop);
 
@@ -693,9 +789,7 @@ function onReelStop(r){
   haptics.buzz(28);
 }
 
-/* ==================================================================
-   7. 旋转逻辑
-   ================================================================== */
+/* ---- 5.5 旋转逻辑 ---- */
 function doSpin(){
   if (state.spinning || !state.started) return;
 
@@ -719,7 +813,6 @@ function doSpin(){
     const baseAngle = idx * TWO_PI / CFG.symPerReel;
     const cur = reelGroups[r].rotation.x;
 
-    // 至少转 4 圈
     const minTurns = 4 + r * 0.7;
     const target = baseAngle + TWO_PI * Math.ceil((cur + TWO_PI * minTurns - baseAngle) / TWO_PI);
 
@@ -738,7 +831,6 @@ function doSpin(){
   haptics.buzz(18);
 }
 
-/* ---------- 结算 ---------- */
 function settleResult(){
   if (!spinAnim || !state.spinning) return;
 
@@ -788,71 +880,7 @@ function settleResult(){
   }
 }
 
-/* ==================================================================
-   8. UI
-   ================================================================== */
-const el = {
-  balance: document.getElementById('balanceVal'),
-  bet: document.getElementById('betVal'),
-  spinBtn: document.getElementById('spinBtn'),
-  betUp: document.getElementById('betUp'),
-  betDown: document.getElementById('betDown'),
-  soundBtn: document.getElementById('soundBtn'),
-  vibBtn: document.getElementById('vibBtn'),
-  modal: document.getElementById('modal'),
-  amountInput: document.getElementById('amountInput'),
-  startBtn: document.getElementById('startBtn'),
-  fx: document.getElementById('fx'),
-  toast: document.getElementById('toast'),
-};
-
-function fmt(n){
-  return Math.round(n).toLocaleString('en-US');
-}
-
-function updateUI(){
-  el.balance.textContent = fmt(state.balance);
-  el.bet.textContent = fmt(state.bet);
-
-  const cantSpin = state.spinning || state.balance < state.bet || !state.started;
-  el.spinBtn.classList.toggle('disabled', cantSpin);
-  el.spinBtn.textContent = state.spinning ? '转 动 中' : '摇';
-
-  el.betUp.disabled = state.spinning;
-  el.betDown.disabled = state.spinning;
-}
-
-let toastTimer = null;
-function toast(msg){
-  el.toast.textContent = msg;
-  el.toast.classList.add('show');
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => el.toast.classList.remove('show'), 1500);
-}
-
-function showWin(text, big){
-  const d = document.createElement('div');
-  d.className = 'win-text' + (big ? ' big' : '');
-  d.textContent = text;
-  el.fx.appendChild(d);
-  setTimeout(() => d.remove(), 1800);
-}
-
-function flashScreen(){
-  const d = document.createElement('div');
-  d.className = 'flash';
-  el.fx.appendChild(d);
-  setTimeout(() => d.remove(), 900);
-}
-
-/* ---------- 开始弹窗 ---------- */
-function openStartModal(){
-  el.modal.classList.remove('hidden');
-  el.startBtn.textContent = '开 始 游 戏';
-  state.started = false;
-  updateUI();
-}
-
+/* ---- 5.6 开始 / 下注 ---- */
 function startGame(){
   sfx.init();
 
@@ -867,7 +895,6 @@ function startGame(){
   state.balance = amount;
   state.started = true;
 
-  // 初始下注为最小档位（不超过余额）
   state.betIndex = 0;
   state.bet = BET_STEPS[0];
   while (state.bet > state.balance && state.betIndex < BET_STEPS.length - 1){
@@ -881,7 +908,6 @@ function startGame(){
   haptics.buzz(20);
 }
 
-/* ---------- 下注调节 ---------- */
 function changeBet(dir){
   if (state.spinning) return;
 
@@ -898,30 +924,27 @@ function changeBet(dir){
   updateUI();
 }
 
-/* ==================================================================
-   9. 事件绑定
-   ================================================================== */
+/* ---- 5.7 事件绑定 ---- */
 function bindEvents(){
-  el.startBtn.addEventListener('click', startGame);
+  bindTap(el.startBtn, startGame);
 
   document.querySelectorAll('.quick-row button').forEach(btn => {
-    btn.addEventListener('click', () => {
+    bindTap(btn, () => {
       el.amountInput.value = btn.dataset.v;
       sfx.init();
       sfx.click();
     });
   });
 
-  el.betUp.addEventListener('click', () => changeBet(1));
-  el.betDown.addEventListener('click', () => changeBet(-1));
+  bindTap(el.betUp, () => changeBet(1));
+  bindTap(el.betDown, () => changeBet(-1));
 
-  el.spinBtn.addEventListener('click', () => {
+  bindTap(el.spinBtn, () => {
     sfx.init();
     doSpin();
   });
 
-  // 声音开关
-  el.soundBtn.addEventListener('click', () => {
+  bindTap(el.soundBtn, () => {
     sfx.init();
     sfx.enabled = !sfx.enabled;
     el.soundBtn.textContent = sfx.enabled ? '🔊' : '🔇';
@@ -929,12 +952,11 @@ function bindEvents(){
     if (sfx.enabled) sfx.click();
   });
 
-  // 震动开关
   if (!haptics.supported){
     el.vibBtn.classList.add('off');
     el.vibBtn.style.opacity = '0.22';
   }
-  el.vibBtn.addEventListener('click', () => {
+  bindTap(el.vibBtn, () => {
     haptics.enabled = !haptics.enabled;
     el.vibBtn.textContent = haptics.enabled ? '📳' : '📴';
     el.vibBtn.classList.toggle('off', !haptics.enabled);
@@ -970,17 +992,20 @@ function bindEvents(){
   window.addEventListener('pointerdown', unlock);
 }
 
-/* ==================================================================
-   10. 启动
-   ================================================================== */
-function boot(){
+/* ---- 5.8 启动 ---- */
+try {
   initThree();
   bindEvents();
   updateUI();
   rafId = requestAnimationFrame(loop);
+  el.loader.classList.add('hide');
+} catch (err){
+  console.error(err);
+  el.loader.innerHTML = '3D 初始化失败<br><span style="font-size:13px;color:#9d8fd0">' +
+    (err && err.message ? err.message : '未知错误') + '</span>';
 }
 
-boot();
+} // end main
 </script>
 </body>
 </html>
