@@ -1,0 +1,986 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0a0620">
+<title>幸运老虎机</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;overflow:hidden;background:#080418;
+  font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Helvetica Neue","Microsoft YaHei",sans-serif;
+  color:#fff;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;
+  position:fixed;width:100%;}
+#app{position:fixed;inset:0;background:
+  radial-gradient(ellipse at 50% 42%, #2a1a55 0%, #150c2e 45%, #080418 100%);}
+#scene{position:absolute;inset:0;width:100%;height:100%;display:block}
+
+#ui{position:absolute;inset:0;pointer-events:none;display:flex;flex-direction:column;
+  justify-content:space-between;
+  padding:calc(env(safe-area-inset-top,0px) + 14px) 16px calc(env(safe-area-inset-bottom,0px) + 18px);}
+
+/* ---------- 顶栏 ---------- */
+#topbar{display:flex;align-items:center;gap:10px;pointer-events:auto}
+.pill{display:flex;align-items:center;gap:9px;
+  background:rgba(255,255,255,.07);border:1px solid rgba(255,200,80,.32);
+  border-radius:999px;padding:8px 18px;
+  backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);}
+.pill-label{font-size:12px;color:#b7a6ef;letter-spacing:2px}
+.pill-value{font-size:18px;font-weight:800;color:#ffd75e;font-variant-numeric:tabular-nums}
+.spacer{flex:1}
+.icon-btn{width:44px;height:44px;border-radius:50%;
+  border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.07);
+  color:#fff;font-size:19px;line-height:1;display:flex;align-items:center;justify-content:center;
+  backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+  transition:transform .12s,opacity .12s;cursor:pointer;padding:0}
+.icon-btn:active{transform:scale(.9)}
+.icon-btn.off{opacity:.3}
+
+/* ---------- 底栏 ---------- */
+#bottom{pointer-events:auto;display:flex;flex-direction:column;gap:16px;align-items:center}
+#betRow{display:flex;align-items:center;gap:18px}
+.bet-btn{width:56px;height:56px;border-radius:50%;
+  border:1px solid rgba(255,200,80,.45);background:rgba(255,255,255,.06);
+  color:#ffd75e;font-size:28px;font-weight:700;line-height:1;
+  display:flex;align-items:center;justify-content:center;
+  transition:transform .1s,background .15s;cursor:pointer;padding:0}
+.bet-btn:active{transform:scale(.9);background:rgba(255,200,80,.22)}
+.bet-btn:disabled{opacity:.3}
+.bet-display{min-width:136px;text-align:center;padding:9px 22px;border-radius:16px;
+  background:rgba(0,0,0,.38);border:1px solid rgba(255,255,255,.1)}
+.bet-label{font-size:11px;color:#9d8fd0;letter-spacing:3px}
+.bet-value{font-size:23px;font-weight:800;color:#fff;font-variant-numeric:tabular-nums;line-height:1.2}
+
+#spinBtn{width:100%;max-width:340px;height:66px;border-radius:34px;border:none;
+  background:linear-gradient(180deg,#ffe27a 0%,#ffbb2e 42%,#f08c00 100%);
+  color:#3a1a00;font-size:23px;font-weight:900;letter-spacing:8px;text-indent:8px;
+  box-shadow:0 10px 26px rgba(255,150,20,.38),inset 0 -4px 0 rgba(0,0,0,.16),
+             inset 0 2px 0 rgba(255,255,255,.55);
+  transition:transform .1s,opacity .2s;cursor:pointer}
+#spinBtn:active{transform:scale(.965)}
+#spinBtn.disabled{opacity:.4;filter:grayscale(.55)}
+
+/* ---------- 弹窗 ---------- */
+#modal{position:fixed;inset:0;background:rgba(5,2,15,.86);
+  backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+  display:flex;align-items:center;justify-content:center;padding:24px;z-index:100}
+#modal.hidden{display:none}
+.modal-box{width:100%;max-width:340px;
+  background:linear-gradient(180deg,#241a45,#110a24);
+  border:1px solid rgba(255,200,80,.28);border-radius:26px;padding:30px 24px;
+  text-align:center;box-shadow:0 24px 70px rgba(0,0,0,.7);
+  animation:boxIn .35s cubic-bezier(.2,1.2,.4,1)}
+@keyframes boxIn{from{opacity:0;transform:scale(.88) translateY(18px)}to{opacity:1;transform:none}}
+.modal-box h1{font-size:23px;color:#ffd75e;margin-bottom:7px;letter-spacing:3px}
+.modal-box .sub{font-size:13px;color:#8f83b8;margin-bottom:22px;line-height:1.5}
+#amountInput{width:100%;height:58px;background:rgba(0,0,0,.45);
+  border:1px solid rgba(255,255,255,.14);border-radius:15px;
+  color:#ffd75e;font-size:27px;font-weight:800;text-align:center;outline:none;
+  font-variant-numeric:tabular-nums;letter-spacing:1px}
+#amountInput:focus{border-color:rgba(255,200,80,.6)}
+.quick-row{display:flex;gap:8px;margin-top:13px}
+.quick-row button{flex:1;height:40px;border-radius:11px;
+  border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.06);
+  color:#cfc4f0;font-size:13px;cursor:pointer;transition:background .15s}
+.quick-row button:active{background:rgba(255,200,80,.2);color:#ffd75e}
+#startBtn{width:100%;height:56px;margin-top:22px;border-radius:17px;border:none;
+  background:linear-gradient(180deg,#ffe27a,#ffab1f 55%,#e07f00);
+  color:#3a1a00;font-size:18px;font-weight:900;letter-spacing:4px;
+  box-shadow:0 8px 22px rgba(255,150,20,.35),inset 0 -3px 0 rgba(0,0,0,.15);
+  cursor:pointer;transition:transform .1s}
+#startBtn:active{transform:scale(.97)}
+
+/* ---------- 提示 / 中奖 ---------- */
+#toast{position:fixed;left:50%;top:20%;transform:translate(-50%,-50%) scale(.9);
+  background:rgba(0,0,0,.82);border:1px solid rgba(255,200,80,.45);
+  color:#ffd75e;padding:11px 24px;border-radius:999px;font-size:14px;font-weight:600;
+  opacity:0;pointer-events:none;transition:opacity .22s,transform .22s;z-index:200;white-space:nowrap}
+#toast.show{opacity:1;transform:translate(-50%,-50%) scale(1)}
+
+#fx{position:fixed;inset:0;pointer-events:none;z-index:150;overflow:hidden}
+.win-text{position:absolute;left:50%;top:46%;transform:translate(-50%,-50%);
+  font-size:38px;font-weight:900;color:#ffd75e;white-space:nowrap;
+  text-shadow:0 0 22px rgba(255,200,60,.95),0 0 46px rgba(255,140,0,.6),0 4px 0 rgba(140,70,0,.55);
+  animation:winPop 1.7s ease-out forwards}
+.win-text.big{font-size:48px}
+@keyframes winPop{
+  0%{opacity:0;transform:translate(-50%,-50%) scale(.3)}
+  14%{opacity:1;transform:translate(-50%,-50%) scale(1.28)}
+  30%{transform:translate(-50%,-50%) scale(1)}
+  72%{opacity:1;transform:translate(-50%,-95%) scale(1)}
+  100%{opacity:0;transform:translate(-50%,-175%) scale(.85)}
+}
+.flash{position:absolute;inset:0;background:radial-gradient(circle at 50% 46%,
+  rgba(255,215,90,.5),rgba(255,150,0,0) 62%);animation:flashOut .8s ease-out forwards}
+@keyframes flashOut{from{opacity:1}to{opacity:0}}
+</style>
+</head>
+<body>
+<div id="app">
+  <canvas id="scene"></canvas>
+
+  <div id="ui">
+    <div id="topbar">
+      <div class="pill">
+        <span class="pill-label">余额</span>
+        <span class="pill-value" id="balanceVal">0</span>
+      </div>
+      <div class="spacer"></div>
+      <button class="icon-btn" id="soundBtn" aria-label="声音开关">🔊</button>
+      <button class="icon-btn" id="vibBtn" aria-label="震动开关">📳</button>
+    </div>
+
+    <div id="bottom">
+      <div id="betRow">
+        <button class="bet-btn" id="betDown">−</button>
+        <div class="bet-display">
+          <div class="bet-label">下注</div>
+          <div class="bet-value" id="betVal">10</div>
+        </div>
+        <button class="bet-btn" id="betUp">+</button>
+      </div>
+      <button id="spinBtn">摇</button>
+    </div>
+  </div>
+
+  <div id="fx"></div>
+  <div id="toast"></div>
+
+  <div id="modal">
+    <div class="modal-box">
+      <h1>幸运老虎机</h1>
+      <div class="sub">请输入你的总金额，开始游戏</div>
+      <input id="amountInput" type="number" inputmode="numeric" pattern="[0-9]*" value="1000" placeholder="总金额">
+      <div class="quick-row">
+        <button data-v="500">500</button>
+        <button data-v="1000">1000</button>
+        <button data-v="5000">5000</button>
+        <button data-v="10000">10000</button>
+      </div>
+      <button id="startBtn">开 始 游 戏</button>
+    </div>
+  </div>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+
+/* ==================================================================
+   1. 符号配置 & 概率
+   ================================================================== */
+const SYMBOLS = [
+  { name:'樱桃', mult:3,  weight:30 },
+  { name:'柠檬', mult:4,  weight:25 },
+  { name:'橙子', mult:5,  weight:20 },
+  { name:'葡萄', mult:6,  weight:12 },
+  { name:'铃铛', mult:10, weight:7  },
+  { name:'星星', mult:20, weight:4  },
+  { name:'七',   mult:50, weight:2  },
+];
+const TOTAL_WEIGHT = SYMBOLS.reduce((a,s)=>a+s.weight,0);
+
+function pickSymbol(){
+  let r = Math.random() * TOTAL_WEIGHT;
+  for (let i=0;i<SYMBOLS.length;i++){
+    r -= SYMBOLS[i].weight;
+    if (r <= 0) return i;
+  }
+  return 0;
+}
+
+/* 每个滚轮的符号排列（7 个互不重复） */
+const LAYOUTS = [
+  [0,1,2,3,4,5,6],
+  [2,4,0,5,1,6,3],
+  [3,5,1,6,4,0,2],
+];
+
+/* ==================================================================
+   2. 游戏状态
+   ================================================================== */
+const BET_STEPS = [10,20,50,100,200,500,1000,2000,5000,10000];
+
+const state = {
+  balance: 0,
+  bet: 10,
+  betIndex: 0,
+  spinning: false,
+  started: false,
+};
+
+/* ==================================================================
+   3. 音效（Web Audio 合成，无外部资源）
+   ================================================================== */
+const sfx = {
+  enabled: true,
+  ctx: null,
+  master: null,
+
+  init(){
+    if (this.ctx) { this.resume(); return; }
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    this.ctx = new AC();
+    this.master = this.ctx.createGain();
+    this.master.gain.value = 0.6;
+    this.master.connect(this.ctx.destination);
+    this.resume();
+  },
+
+  resume(){
+    if (this.ctx && this.ctx.state === 'suspended') {
+      this.ctx.resume().catch(()=>{});
+    }
+  },
+
+  tone(freq, dur, type='sine', gain=0.16, delay=0){
+    if (!this.enabled || !this.ctx) return;
+    const t = this.ctx.currentTime + delay;
+    const o = this.ctx.createOscillator();
+    const g = this.ctx.createGain();
+    o.type = type;
+    o.frequency.setValueAtTime(freq, t);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(gain, t + 0.012);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g); g.connect(this.master);
+    o.start(t); o.stop(t + dur + 0.05);
+  },
+
+  sweep(f1, f2, dur, type='sine', gain=0.12){
+    if (!this.enabled || !this.ctx) return;
+    const t = this.ctx.currentTime;
+    const o = this.ctx.createOscillator();
+    const g = this.ctx.createGain();
+    o.type = type;
+    o.frequency.setValueAtTime(f1, t);
+    o.frequency.exponentialRampToValueAtTime(Math.max(20,f2), t + dur);
+    g.gain.setValueAtTime(gain, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g); g.connect(this.master);
+    o.start(t); o.stop(t + dur + 0.05);
+  },
+
+  click(){ this.tone(880, 0.055, 'square', 0.07); },
+  deny(){ this.tone(180, 0.16, 'sawtooth', 0.1); },
+  spin(){
+    this.sweep(180, 950, 0.32, 'sawtooth', 0.09);
+    for (let i=0;i<7;i++) this.tone(1200 - i*90, 0.035, 'square', 0.035, i*0.045);
+  },
+  thud(){ this.tone(140, 0.13, 'triangle', 0.16); this.tone(90, 0.16, 'sine', 0.14, 0.01); },
+  win(){
+    [523.25, 659.25, 783.99, 1046.5].forEach((f,i)=>{
+      this.tone(f, 0.19, 'triangle', 0.14, i * 0.085);
+    });
+  },
+  jackpot(){
+    const notes = [523.25,659.25,783.99,1046.5,1318.5,1567.98,2093];
+    notes.forEach((f,i)=> this.tone(f, 0.24, 'triangle', 0.14, i*0.085));
+    [261.6, 329.6, 392].forEach((f,i)=> this.tone(f, 0.9, 'sine', 0.09, i*0.02));
+    for (let i=0;i<10;i++) this.tone(1600 + Math.random()*800, 0.06, 'square', 0.03, 0.65 + i*0.06);
+  },
+  lose(){ this.tone(320, 0.13, 'sine', 0.06); this.tone(240, 0.18, 'sine', 0.06, 0.1); },
+};
+
+/* ==================================================================
+   4. 震动
+   ================================================================== */
+const haptics = {
+  enabled: true,
+  supported: typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function',
+  buzz(pattern){
+    if (!this.enabled || !this.supported) return;
+    try { navigator.vibrate(pattern); } catch(e){}
+  }
+};
+
+/* ==================================================================
+   5. Three.js 场景
+   ================================================================== */
+const CFG = {
+  reelCount: 3,
+  symPerReel: 7,
+  reelRadius: 1.2,
+  reelSpacing: 1.42,
+  planeW: 1.35,
+};
+CFG.planeH = 2 * CFG.reelRadius * Math.sin(Math.PI / CFG.symPerReel); // ≈1.041
+
+let renderer, scene, camera;
+const reelGroups = [];
+let spinAnim = null;
+
+/* ---------- 绘图工具 ---------- */
+function roundRect(ctx, x, y, w, h, r){
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y,     x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x,     y + h, r);
+  ctx.arcTo(x,     y + h, x,     y,     r);
+  ctx.arcTo(x,     y,     x + w, y,     r);
+  ctx.closePath();
+}
+
+/* ---------- 画符号 ---------- */
+function drawSymbol(ctx, type, cx, cy, s){
+  ctx.save();
+  ctx.translate(cx, cy);
+  const u = s / 2;
+
+  if (type === 0){                       // 🍒 樱桃
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = '#4f9e3f';
+    ctx.lineWidth = u * 0.13;
+    ctx.beginPath();
+    ctx.moveTo(-u * 0.5, u * 0.12);
+    ctx.quadraticCurveTo(-u * 0.1, -u * 0.9, u * 0.55, -u * 0.72);
+    ctx.stroke();
+
+    ctx.fillStyle = '#63c04e';
+    ctx.beginPath();
+    ctx.ellipse(u * 0.63, -u * 0.8, u * 0.29, u * 0.15, -0.55, 0, Math.PI * 2);
+    ctx.fill();
+
+    const cherry = (x, y, r) => {
+      const g = ctx.createRadialGradient(x - r*0.35, y - r*0.35, r*0.08, x, y, r);
+      g.addColorStop(0, '#ff6b7d');
+      g.addColorStop(0.55, '#e8283c');
+      g.addColorStop(1, '#a3101f');
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+    };
+    cherry(-u * 0.44, u * 0.38, u * 0.40);
+    cherry( u * 0.52, u * 0.52, u * 0.34);
+  }
+  else if (type === 1){                  // 🍋 柠檬
+    ctx.save();
+    ctx.rotate(-0.35);
+    const g = ctx.createLinearGradient(-u * 0.9, 0, u * 0.9, 0);
+    g.addColorStop(0, '#fff59a');
+    g.addColorStop(0.45, '#ffd21e');
+    g.addColorStop(1, '#e09b00');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, u * 0.86, u * 0.58, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.55)';
+    ctx.beginPath();
+    ctx.ellipse(-u * 0.25, -u * 0.2, u * 0.3, u * 0.13, -0.35, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+  else if (type === 2){                  // 🍊 橙子
+    const g = ctx.createRadialGradient(-u * 0.3, -u * 0.3, u * 0.08, 0, 0, u * 0.86);
+    g.addColorStop(0, '#ffc46b');
+    g.addColorStop(0.5, '#ff9a1f');
+    g.addColorStop(1, '#e06f00');
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(0, 0, u * 0.8, 0, Math.PI * 2); ctx.fill();
+
+    ctx.fillStyle = 'rgba(180,85,0,0.22)';
+    for (let i = 0; i < 10; i++){
+      const a = i * 2.399;
+      const r = u * 0.56 * Math.sqrt((i + 1) / 10);
+      ctx.beginPath();
+      ctx.arc(Math.cos(a) * r, Math.sin(a) * r, u * 0.052, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.fillStyle = '#4fae3f';
+    ctx.beginPath();
+    ctx.ellipse(u * 0.12, -u * 0.82, u * 0.3, u * 0.14, -0.4, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  else if (type === 3){                  // 🍇 葡萄
+    ctx.strokeStyle = '#6b3f1d';
+    ctx.lineWidth = u * 0.1;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(0, -u * 0.98);
+    ctx.lineTo(0, -u * 0.62);
+    ctx.stroke();
+
+    ctx.fillStyle = '#57b04a';
+    ctx.beginPath();
+    ctx.ellipse(u * 0.34, -u * 0.78, u * 0.3, u * 0.16, -0.5, 0, Math.PI * 2);
+    ctx.fill();
+
+    const grapes = [
+      [-0.44,-0.30],[0,-0.44],[0.44,-0.30],
+      [-0.22,-0.02],[0.22,-0.02],
+      [-0.44,0.30],[0,0.16],[0.44,0.30],
+      [0,0.60]
+    ];
+    grapes.forEach(([gx, gy]) => {
+      const x = gx * u, y = gy * u, r = u * 0.27;
+      const rg = ctx.createRadialGradient(x - r*0.35, y - r*0.35, r*0.08, x, y, r);
+      rg.addColorStop(0, '#c88ce8');
+      rg.addColorStop(1, '#6a2c9c');
+      ctx.fillStyle = rg;
+      ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+    });
+  }
+  else if (type === 4){                  // 🔔 铃铛
+    const g = ctx.createLinearGradient(-u * 0.7, 0, u * 0.7, 0);
+    g.addColorStop(0, '#fff0a0');
+    g.addColorStop(0.45, '#ffc61a');
+    g.addColorStop(1, '#d99400');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.moveTo(-u * 0.76, u * 0.48);
+    ctx.bezierCurveTo(-u * 0.72, -u * 0.25, -u * 0.5, -u * 0.66, 0, -u * 0.7);
+    ctx.bezierCurveTo( u * 0.5, -u * 0.66,  u * 0.72, -u * 0.25, u * 0.76, u * 0.48);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.fillStyle = '#c98a00';
+    roundRect(ctx, -u * 0.88, u * 0.40, u * 1.76, u * 0.22, u * 0.11);
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.arc(0, u * 0.78, u * 0.18, 0, Math.PI * 2);
+    ctx.fillStyle = '#e0a000';
+    ctx.fill();
+
+    ctx.fillStyle = 'rgba(255,255,255,0.55)';
+    ctx.beginPath();
+    ctx.ellipse(-u * 0.3, -u * 0.14, u * 0.11, u * 0.28, 0.22, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  else if (type === 5){                  // ⭐ 星星
+    const g = ctx.createLinearGradient(0, -u * 0.95, 0, u * 0.95);
+    g.addColorStop(0, '#fff8c0');
+    g.addColorStop(0.5, '#ffd21e');
+    g.addColorStop(1, '#e09b00');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    const spikes = 5, outer = u * 0.96, inner = u * 0.42;
+    for (let i = 0; i < spikes * 2; i++){
+      const r = (i % 2 === 0) ? outer : inner;
+      const a = -Math.PI / 2 + i * Math.PI / spikes;
+      const x = Math.cos(a) * r, y = Math.sin(a) * r;
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = '#c98a00';
+    ctx.lineWidth = u * 0.055;
+    ctx.stroke();
+  }
+  else if (type === 6){                  // 7️⃣ 七
+    const g = ctx.createLinearGradient(0, -u * 0.9, 0, u * 0.9);
+    g.addColorStop(0, '#ff5a5a');
+    g.addColorStop(0.5, '#e02020');
+    g.addColorStop(1, '#8a0a0a');
+    ctx.font = `bold ${u * 1.75}px "Arial Black", Arial, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.lineWidth = u * 0.2;
+    ctx.strokeStyle = '#ffe066';
+    ctx.strokeText('7', 0, u * 0.06);
+    ctx.fillStyle = g;
+    ctx.fillText('7', 0, u * 0.06);
+  }
+
+  ctx.restore();
+}
+
+/* ---------- 生成符号卡片纹理 ---------- */
+function makeSymbolTexture(type){
+  const W = 260, H = 200;
+  const cv = document.createElement('canvas');
+  cv.width = W; cv.height = H;
+  const ctx = cv.getContext('2d');
+
+  const g = ctx.createLinearGradient(0, 0, 0, H);
+  g.addColorStop(0, '#ffffff');
+  g.addColorStop(0.55, '#eef2fb');
+  g.addColorStop(1, '#ccd6e9');
+  ctx.fillStyle = g;
+  roundRect(ctx, 5, 5, W - 10, H - 10, 30);
+  ctx.fill();
+
+  ctx.lineWidth = 5;
+  ctx.strokeStyle = 'rgba(255,255,255,0.95)';
+  roundRect(ctx, 11, 11, W - 22, H - 22, 24);
+  ctx.stroke();
+
+  ctx.save();
+  roundRect(ctx, 5, 5, W - 10, H - 10, 30);
+  ctx.clip();
+  const hl = ctx.createLinearGradient(0, 0, 0, H * 0.46);
+  hl.addColorStop(0, 'rgba(255,255,255,0.92)');
+  hl.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = hl;
+  ctx.fillRect(0, 0, W, H * 0.46);
+  ctx.restore();
+
+  drawSymbol(ctx, type, W / 2, H / 2, H * 0.8);
+  return cv;
+}
+
+/* ---------- 生成机箱面板纹理 ---------- */
+function makePanelTexture(){
+  const W = 520, H = 340;
+  const cv = document.createElement('canvas');
+  cv.width = W; cv.height = H;
+  const ctx = cv.getContext('2d');
+
+  ctx.save();
+  ctx.shadowColor = 'rgba(255,190,60,0.55)';
+  ctx.shadowBlur = 34;
+  const g = ctx.createLinearGradient(0, 0, 0, H);
+  g.addColorStop(0, '#2a1f4e');
+  g.addColorStop(0.55, '#150d2e');
+  g.addColorStop(1, '#0a0518');
+  ctx.fillStyle = g;
+  roundRect(ctx, 22, 22, W - 44, H - 44, 42);
+  ctx.fill();
+  ctx.restore();
+
+  ctx.strokeStyle = 'rgba(255,205,90,0.8)';
+  ctx.lineWidth = 4;
+  roundRect(ctx, 22, 22, W - 44, H - 44, 42);
+  ctx.stroke();
+
+  ctx.strokeStyle = 'rgba(255,225,150,0.22)';
+  ctx.lineWidth = 1.5;
+  roundRect(ctx, 36, 36, W - 72, H - 72, 32);
+  ctx.stroke();
+
+  return cv;
+}
+
+/* ---------- 初始化 Three.js ---------- */
+function initThree(){
+  const canvas = document.getElementById('scene');
+  renderer = new THREE.WebGLRenderer({
+    canvas, antialias: true, alpha: true, powerPreference: 'high-performance'
+  });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  renderer.setSize(window.innerWidth, window.innerHeight, false);
+
+  scene = new THREE.Scene();
+  camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 200);
+
+  const maxAniso = renderer.capabilities.getMaxAnisotropy();
+  const textures = SYMBOLS.map((_, i) => {
+    const tex = new THREE.CanvasTexture(makeSymbolTexture(i));
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.anisotropy = maxAniso;
+    tex.needsUpdate = true;
+    return tex;
+  });
+
+  const planeGeo = new THREE.PlaneGeometry(CFG.planeW, CFG.planeH);
+  const N = CFG.symPerReel;
+
+  for (let r = 0; r < CFG.reelCount; r++){
+    const group = new THREE.Group();
+    group.position.x = (r - 1) * CFG.reelSpacing;
+
+    for (let i = 0; i < N; i++){
+      const a = i * Math.PI * 2 / N;
+      const mat = new THREE.MeshBasicMaterial({
+        map: textures[LAYOUTS[r][i]],
+        transparent: true,
+        depthWrite: false,
+      });
+      const mesh = new THREE.Mesh(planeGeo, mat);
+      mesh.position.set(0, CFG.reelRadius * Math.sin(a), CFG.reelRadius * Math.cos(a));
+      mesh.rotation.x = -a;
+      group.add(mesh);
+    }
+
+    scene.add(group);
+    reelGroups.push(group);
+  }
+
+  // 机箱面板
+  const panelTex = new THREE.CanvasTexture(makePanelTexture());
+  panelTex.colorSpace = THREE.SRGBColorSpace;
+  const panel = new THREE.Mesh(
+    new THREE.PlaneGeometry(5.2, 3.4),
+    new THREE.MeshBasicMaterial({ map: panelTex, transparent: true, depthWrite: false })
+  );
+  panel.position.z = -1.7;
+  scene.add(panel);
+
+  updateCamera();
+
+  window.addEventListener('resize', onResize);
+  window.addEventListener('orientationchange', () => setTimeout(onResize, 220));
+}
+
+function onResize(){
+  const w = window.innerWidth, h = window.innerHeight;
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  renderer.setSize(w, h, false);
+  updateCamera();
+}
+
+function updateCamera(){
+  const w = window.innerWidth, h = window.innerHeight;
+  const aspect = w / h;
+  camera.aspect = aspect;
+
+  const vFov = 60 * Math.PI / 180;
+  const tanV = Math.tan(vFov / 2);
+
+  const needW = 5.0;
+  const needH = 3.2;
+
+  const dV = (needH / 2) / tanV;
+  const dH = (needW / 2) / (tanV * aspect);
+
+  const d = Math.max(dV, dH, 4.0);
+
+  camera.position.set(0, 0, d);
+  camera.fov = 60;
+  camera.lookAt(0, 0, 0);
+  camera.updateProjectionMatrix();
+}
+
+/* ==================================================================
+   6. 渲染循环
+   ================================================================== */
+function easeOut(t){ return 1 - Math.pow(1 - t, 2.5); }
+
+let rafId = null;
+function loop(now){
+  rafId = requestAnimationFrame(loop);
+
+  if (spinAnim && !spinAnim.finished){
+    let allDone = true;
+    for (let r = 0; r < CFG.reelCount; r++){
+      const s = spinAnim.reels[r];
+      if (s.done) continue;
+      allDone = false;
+
+      const raw = (now - s.start) / s.dur;
+      if (raw <= 0) continue;
+
+      const t = Math.min(1, raw);
+      reelGroups[r].rotation.x = s.from + (s.to - s.from) * easeOut(t);
+
+      if (t >= 1){
+        s.done = true;
+        reelGroups[r].rotation.x = s.to;
+        onReelStop(r);
+      }
+    }
+
+    if (allDone){
+      spinAnim.finished = true;
+      setTimeout(settleResult, 220);
+    }
+  }
+
+  renderer.render(scene, camera);
+}
+
+function onReelStop(r){
+  sfx.thud();
+  haptics.buzz(28);
+}
+
+/* ==================================================================
+   7. 旋转逻辑
+   ================================================================== */
+function doSpin(){
+  if (state.spinning || !state.started) return;
+
+  if (state.balance < state.bet){
+    toast('余额不足');
+    sfx.deny();
+    return;
+  }
+
+  state.balance -= state.bet;
+  state.spinning = true;
+  updateUI();
+
+  const result = [pickSymbol(), pickSymbol(), pickSymbol()];
+  const now = performance.now();
+  const TWO_PI = Math.PI * 2;
+  const reels = [];
+
+  for (let r = 0; r < CFG.reelCount; r++){
+    const idx = LAYOUTS[r].indexOf(result[r]);
+    const baseAngle = idx * TWO_PI / CFG.symPerReel;
+    const cur = reelGroups[r].rotation.x;
+
+    // 至少转 4 圈
+    const minTurns = 4 + r * 0.7;
+    const target = baseAngle + TWO_PI * Math.ceil((cur + TWO_PI * minTurns - baseAngle) / TWO_PI);
+
+    reels.push({
+      from: cur,
+      to: target,
+      start: now + r * 130,
+      dur: 1550 + r * 430,
+      done: false,
+    });
+  }
+
+  spinAnim = { reels, result, finished: false };
+
+  sfx.spin();
+  haptics.buzz(18);
+}
+
+/* ---------- 结算 ---------- */
+function settleResult(){
+  if (!spinAnim || !state.spinning) return;
+
+  const [a, b, c] = spinAnim.result;
+  let win = 0;
+  let kind = 'lose';
+
+  if (a === b && b === c){
+    win = Math.floor(state.bet * SYMBOLS[a].mult);
+    kind = (a === 6) ? 'jackpot' : 'triple';
+  } else if (a === b || b === c || a === c){
+    win = Math.floor(state.bet * 1.5);
+    kind = 'pair';
+  }
+
+  if (win > 0){
+    state.balance += win;
+
+    if (kind === 'jackpot'){
+      showWin('🎉 大奖！ +' + win, true);
+      flashScreen();
+      sfx.jackpot();
+      haptics.buzz([0, 70, 50, 70, 50, 70, 50, 240]);
+    } else if (kind === 'triple'){
+      showWin('+' + win, true);
+      flashScreen();
+      sfx.win();
+      haptics.buzz([0, 45, 40, 90]);
+    } else {
+      showWin('+' + win, false);
+      sfx.win();
+      haptics.buzz(42);
+    }
+  } else {
+    sfx.lose();
+  }
+
+  state.spinning = false;
+  spinAnim = null;
+  updateUI();
+
+  if (state.balance <= 0){
+    setTimeout(() => {
+      toast('余额已用完，请重新开始');
+      setTimeout(openStartModal, 900);
+    }, 700);
+  }
+}
+
+/* ==================================================================
+   8. UI
+   ================================================================== */
+const el = {
+  balance: document.getElementById('balanceVal'),
+  bet: document.getElementById('betVal'),
+  spinBtn: document.getElementById('spinBtn'),
+  betUp: document.getElementById('betUp'),
+  betDown: document.getElementById('betDown'),
+  soundBtn: document.getElementById('soundBtn'),
+  vibBtn: document.getElementById('vibBtn'),
+  modal: document.getElementById('modal'),
+  amountInput: document.getElementById('amountInput'),
+  startBtn: document.getElementById('startBtn'),
+  fx: document.getElementById('fx'),
+  toast: document.getElementById('toast'),
+};
+
+function fmt(n){
+  return Math.round(n).toLocaleString('en-US');
+}
+
+function updateUI(){
+  el.balance.textContent = fmt(state.balance);
+  el.bet.textContent = fmt(state.bet);
+
+  const cantSpin = state.spinning || state.balance < state.bet || !state.started;
+  el.spinBtn.classList.toggle('disabled', cantSpin);
+  el.spinBtn.textContent = state.spinning ? '转 动 中' : '摇';
+
+  el.betUp.disabled = state.spinning;
+  el.betDown.disabled = state.spinning;
+}
+
+let toastTimer = null;
+function toast(msg){
+  el.toast.textContent = msg;
+  el.toast.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.toast.classList.remove('show'), 1500);
+}
+
+function showWin(text, big){
+  const d = document.createElement('div');
+  d.className = 'win-text' + (big ? ' big' : '');
+  d.textContent = text;
+  el.fx.appendChild(d);
+  setTimeout(() => d.remove(), 1800);
+}
+
+function flashScreen(){
+  const d = document.createElement('div');
+  d.className = 'flash';
+  el.fx.appendChild(d);
+  setTimeout(() => d.remove(), 900);
+}
+
+/* ---------- 开始弹窗 ---------- */
+function openStartModal(){
+  el.modal.classList.remove('hidden');
+  el.startBtn.textContent = '开 始 游 戏';
+  state.started = false;
+  updateUI();
+}
+
+function startGame(){
+  sfx.init();
+
+  let amount = parseInt(el.amountInput.value, 10);
+  if (!Number.isFinite(amount) || amount < 10){
+    toast('请输入至少 10 的金额');
+    el.amountInput.value = 100;
+    return;
+  }
+  if (amount > 99999999) amount = 99999999;
+
+  state.balance = amount;
+  state.started = true;
+
+  // 初始下注为最小档位（不超过余额）
+  state.betIndex = 0;
+  state.bet = BET_STEPS[0];
+  while (state.bet > state.balance && state.betIndex < BET_STEPS.length - 1){
+    state.betIndex++;
+    state.bet = BET_STEPS[state.betIndex];
+  }
+
+  el.modal.classList.add('hidden');
+  updateUI();
+  sfx.click();
+  haptics.buzz(20);
+}
+
+/* ---------- 下注调节 ---------- */
+function changeBet(dir){
+  if (state.spinning) return;
+
+  let idx = state.betIndex + dir;
+  idx = Math.max(0, Math.min(BET_STEPS.length - 1, idx));
+
+  if (idx === state.betIndex) return;
+
+  state.betIndex = idx;
+  state.bet = BET_STEPS[idx];
+
+  sfx.click();
+  haptics.buzz(12);
+  updateUI();
+}
+
+/* ==================================================================
+   9. 事件绑定
+   ================================================================== */
+function bindEvents(){
+  el.startBtn.addEventListener('click', startGame);
+
+  document.querySelectorAll('.quick-row button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      el.amountInput.value = btn.dataset.v;
+      sfx.init();
+      sfx.click();
+    });
+  });
+
+  el.betUp.addEventListener('click', () => changeBet(1));
+  el.betDown.addEventListener('click', () => changeBet(-1));
+
+  el.spinBtn.addEventListener('click', () => {
+    sfx.init();
+    doSpin();
+  });
+
+  // 声音开关
+  el.soundBtn.addEventListener('click', () => {
+    sfx.init();
+    sfx.enabled = !sfx.enabled;
+    el.soundBtn.textContent = sfx.enabled ? '🔊' : '🔇';
+    el.soundBtn.classList.toggle('off', !sfx.enabled);
+    if (sfx.enabled) sfx.click();
+  });
+
+  // 震动开关
+  if (!haptics.supported){
+    el.vibBtn.classList.add('off');
+    el.vibBtn.style.opacity = '0.22';
+  }
+  el.vibBtn.addEventListener('click', () => {
+    haptics.enabled = !haptics.enabled;
+    el.vibBtn.textContent = haptics.enabled ? '📳' : '📴';
+    el.vibBtn.classList.toggle('off', !haptics.enabled);
+    if (haptics.enabled) haptics.buzz(30);
+    sfx.init();
+    sfx.click();
+  });
+
+  // 键盘（桌面调试用）
+  window.addEventListener('keydown', (e) => {
+    if (e.code === 'Space'){ e.preventDefault(); sfx.init(); doSpin(); }
+    if (e.code === 'ArrowLeft') changeBet(-1);
+    if (e.code === 'ArrowRight') changeBet(1);
+  });
+
+  // 页面可见性
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden){
+      if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
+    } else {
+      if (!rafId) rafId = requestAnimationFrame(loop);
+      sfx.resume();
+    }
+  });
+
+  // 首次触摸解锁音频（iOS）
+  const unlock = () => {
+    sfx.init();
+    window.removeEventListener('touchstart', unlock);
+    window.removeEventListener('pointerdown', unlock);
+  };
+  window.addEventListener('touchstart', unlock, { passive: true });
+  window.addEventListener('pointerdown', unlock);
+}
+
+/* ==================================================================
+   10. 启动
+   ================================================================== */
+function boot(){
+  initThree();
+  bindEvents();
+  updateUI();
+  rafId = requestAnimationFrame(loop);
+}
+
+boot();
+</script>
+</body>
+</html>
