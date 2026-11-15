@@ -1,0 +1,980 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,minimum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#14141f">
+<meta name="format-detection" content="telephone=no">
+<title>3D 2048</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;}
+  html,body{
+    width:100%;height:100%;overflow:hidden;background:#14141f;
+    font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Helvetica Neue",Arial,sans-serif;
+    -webkit-user-select:none;user-select:none;
+    -webkit-tap-highlight-color:transparent;
+    -webkit-touch-callout:none;
+    overscroll-behavior:none;
+    touch-action:none;
+  }
+  #app{position:fixed;inset:0;overflow:hidden;}
+  canvas{display:block;width:100%;height:100%;touch-action:none;}
+
+  #hud{
+    position:fixed;left:0;right:0;top:0;
+    padding:calc(env(safe-area-inset-top,0px) + 12px) 14px 0;
+    display:flex;justify-content:space-between;align-items:flex-start;gap:10px;
+    pointer-events:none;z-index:20;
+  }
+  .scores{display:flex;gap:8px;}
+  .score-box{
+    background:rgba(255,255,255,.07);
+    border:1px solid rgba(255,255,255,.1);
+    border-radius:13px;padding:6px 14px;min-width:74px;text-align:center;
+  }
+  .score-box .label{display:block;font-size:10px;letter-spacing:2px;color:#8b8ba7;line-height:1.4;}
+  .score-box .val{display:block;font-size:19px;font-weight:700;color:#fff;font-variant-numeric:tabular-nums;line-height:1.2;}
+
+  .controls{display:flex;gap:7px;pointer-events:auto;}
+  .toggle{
+    appearance:none;border:1px solid rgba(255,255,255,.14);
+    background:rgba(255,255,255,.06);color:#cfcfe0;
+    font-size:12px;font-family:inherit;font-weight:600;
+    padding:9px 12px;border-radius:13px;cursor:pointer;
+    transition:all .18s ease;line-height:1;white-space:nowrap;
+  }
+  .toggle:active{transform:scale(.94);}
+  .toggle.on{background:rgba(237,194,46,.18);border-color:rgba(237,194,46,.55);color:#f3d97a;}
+  .toggle.off{opacity:.42;}
+
+  #overlay{
+    position:fixed;inset:0;z-index:40;
+    display:flex;align-items:center;justify-content:center;
+    background:rgba(10,10,18,.72);
+    opacity:0;pointer-events:none;transition:opacity .28s ease;
+    padding:24px;
+  }
+  #overlay.show{opacity:1;pointer-events:auto;}
+  .panel{
+    background:linear-gradient(160deg,#26263a,#1b1b29);
+    border:1px solid rgba(255,255,255,.12);
+    border-radius:22px;padding:28px 34px;text-align:center;
+    box-shadow:0 22px 60px rgba(0,0,0,.6);
+    transform:translateY(10px) scale(.96);
+    transition:transform .3s cubic-bezier(.2,1.4,.5,1);
+    max-width:300px;width:100%;
+  }
+  #overlay.show .panel{transform:translateY(0) scale(1);}
+  .panel h2{font-size:24px;color:#fff;margin-bottom:10px;font-weight:800;}
+  .panel p{font-size:14px;color:#9d9db5;margin-bottom:22px;line-height:1.6;}
+  .panel p b{color:#f3d97a;font-size:20px;font-variant-numeric:tabular-nums;}
+  .btn-primary{
+    appearance:none;border:none;width:100%;
+    background:linear-gradient(135deg,#f0c93f,#e0a72c);
+    color:#2a2205;font-family:inherit;font-size:16px;font-weight:800;
+    padding:14px;border-radius:14px;cursor:pointer;letter-spacing:1px;
+    box-shadow:0 6px 18px rgba(224,167,44,.32);
+    transition:transform .12s ease;
+  }
+  .btn-primary:active{transform:scale(.96);}
+
+  #toast{
+    position:fixed;left:50%;top:44%;transform:translate(-50%,-50%) scale(.8);
+    background:rgba(237,194,46,.95);color:#241d02;
+    font-weight:800;font-size:18px;letter-spacing:1px;
+    padding:14px 30px;border-radius:16px;z-index:50;
+    opacity:0;pointer-events:none;transition:all .35s cubic-bezier(.2,1.4,.5,1);
+    box-shadow:0 10px 40px rgba(237,194,46,.4);
+  }
+  #toast.show{opacity:1;transform:translate(-50%,-50%) scale(1);}
+
+  #loading{
+    position:fixed;inset:0;z-index:99;display:flex;align-items:center;justify-content:center;
+    background:#14141f;color:#6b6b85;font-size:14px;letter-spacing:2px;
+    transition:opacity .4s ease;
+  }
+  #loading.hide{opacity:0;pointer-events:none;}
+</style>
+</head>
+<body>
+<div id="app">
+  <canvas id="c"></canvas>
+
+  <div id="hud">
+    <div class="scores">
+      <div class="score-box"><span class="label">SCORE</span><span class="val" id="score">0</span></div>
+      <div class="score-box"><span class="label">BEST</span><span class="val" id="best">0</span></div>
+    </div>
+    <div class="controls">
+      <button id="btnSound" class="toggle on">音效</button>
+      <button id="btnHaptic" class="toggle on">震动</button>
+      <button id="btnRestart" class="toggle">重开</button>
+    </div>
+  </div>
+
+  <div id="overlay">
+    <div class="panel">
+      <h2 id="ovTitle">游戏结束</h2>
+      <p id="ovDesc">得分 <b id="ovScore">0</b></p>
+      <button class="btn-primary" id="btnNew">再来一局</button>
+    </div>
+  </div>
+
+  <div id="toast"></div>
+</div>
+
+<div id="loading">LOADING…</div>
+
+<script type="module">
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
+
+/* ============================================================
+   常量配置
+   ============================================================ */
+const GRID_SIZE   = 4;
+const SPACING     = 1.12;
+const TILE_SIZE   = 0.98;
+const TILE_HEIGHT = 0.34;
+const TILE_RADIUS = 0.05;
+const MOVE_DUR    = 110;
+const BOARD_PAD   = 0.18;
+const BOARD_SIZE  = GRID_SIZE * SPACING + BOARD_PAD * 2;
+const BOARD_HALF  = BOARD_SIZE / 2;
+const SLOT_H      = 0.06;
+const TILE_Y      = SLOT_H + TILE_HEIGHT / 2;
+const CAM_ELEV    = 62 * Math.PI / 180;
+const CAM_FOV     = 40;
+const SWIPE_MIN   = 24;
+
+const COLORS = {
+  2:    { top:'#eee4da', side:'#ddd2c6', text:'#776e65' },
+  4:    { top:'#ede0c8', side:'#dcd0b5', text:'#776e65' },
+  8:    { top:'#f2b179', side:'#dda065', text:'#ffffff' },
+  16:   { top:'#f59563', side:'#e0834f', text:'#ffffff' },
+  32:   { top:'#f67c5f', side:'#e06a4b', text:'#ffffff' },
+  64:   { top:'#f65e3b', side:'#e04c27', text:'#ffffff' },
+  128:  { top:'#edcf72', side:'#dbbc5e', text:'#ffffff' },
+  256:  { top:'#edcc61', side:'#dbba4d', text:'#ffffff' },
+  512:  { top:'#edc850', side:'#dbb63c', text:'#ffffff' },
+  1024: { top:'#edc53f', side:'#dbb32b', text:'#ffffff' },
+  2048: { top:'#edc22e', side:'#dbaf1a', text:'#ffffff' },
+  4096: { top:'#3c3a32', side:'#2c2a24', text:'#ffffff' },
+  8192: { top:'#3c3a32', side:'#2c2a24', text:'#ffffff' }
+};
+const DEFAULT_COLOR = { top:'#3c3a32', side:'#2c2a24', text:'#ffffff' };
+
+/* ============================================================
+   DOM
+   ============================================================ */
+const canvas     = document.getElementById('c');
+const scoreEl    = document.getElementById('score');
+const bestEl     = document.getElementById('best');
+const overlay    = document.getElementById('overlay');
+const ovTitle    = document.getElementById('ovTitle');
+const ovDesc     = document.getElementById('ovDesc');
+const ovScore    = document.getElementById('ovScore');
+const btnSound   = document.getElementById('btnSound');
+const btnHaptic  = document.getElementById('btnHaptic');
+const btnRestart = document.getElementById('btnRestart');
+const btnNew     = document.getElementById('btnNew');
+const toastEl    = document.getElementById('toast');
+const loadingEl  = document.getElementById('loading');
+const appEl      = document.getElementById('app');
+
+/* ============================================================
+   存储 / 设置
+   ============================================================ */
+function lsGet(k, def) {
+  try { const v = localStorage.getItem(k); return v === null ? def : v; }
+  catch (e) { return def; }
+}
+function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+
+let soundOn  = lsGet('g2048.sound', '1') === '1';
+let hapticOn = lsGet('g2048.haptic', '1') === '1';
+let best     = parseInt(lsGet('g2048.best', '0'), 10) || 0;
+
+/* ============================================================
+   音频引擎（WebAudio 实时合成，无外部资源）
+   ============================================================ */
+let audioCtx = null;
+let masterGain = null;
+
+function ensureAudio() {
+  if (!audioCtx) {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    try {
+      audioCtx = new AC();
+      masterGain = audioCtx.createGain();
+      masterGain.gain.value = 0.5;
+      masterGain.connect(audioCtx.destination);
+      // iOS 解锁：播放一个静音 buffer
+      const buf = audioCtx.createBuffer(1, 1, 22050);
+      const src = audioCtx.createBufferSource();
+      src.buffer = buf;
+      src.connect(audioCtx.destination);
+      src.start(0);
+    } catch (e) { audioCtx = null; return; }
+  }
+  if (audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
+}
+
+function unlockAudio() { ensureAudio(); }
+
+function sfxSlide() {
+  if (!soundOn || !audioCtx) return;
+  const t = audioCtx.currentTime;
+  const o = audioCtx.createOscillator();
+  const g = audioCtx.createGain();
+  o.type = 'triangle';
+  o.frequency.setValueAtTime(380, t);
+  o.frequency.exponentialRampToValueAtTime(160, t + 0.09);
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(0.05, t + 0.012);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.11);
+  o.connect(g); g.connect(masterGain);
+  o.start(t); o.stop(t + 0.13);
+}
+
+function sfxMerge(value) {
+  if (!soundOn || !audioCtx) return;
+  const idx  = Math.max(1, Math.log2(value));
+  const base = 170 * Math.pow(1.155, idx);
+  const t0   = audioCtx.currentTime;
+  [[base, 'sine', 0.10], [base * 1.5, 'triangle', 0.045]].forEach(([f, type, vol]) => {
+    const o = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    o.type = type;
+    o.frequency.setValueAtTime(f, t0);
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(vol, t0 + 0.012);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.20);
+    o.connect(g); g.connect(masterGain);
+    o.start(t0); o.stop(t0 + 0.22);
+  });
+}
+
+function sfxSpawn() {
+  if (!soundOn || !audioCtx) return;
+  const t = audioCtx.currentTime;
+  const o = audioCtx.createOscillator();
+  const g = audioCtx.createGain();
+  o.type = 'sine';
+  o.frequency.setValueAtTime(920, t);
+  o.frequency.exponentialRampToValueAtTime(1320, t + 0.05);
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(0.028, t + 0.008);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.07);
+  o.connect(g); g.connect(masterGain);
+  o.start(t); o.stop(t + 0.09);
+}
+
+function sfxGameOver() {
+  if (!soundOn || !audioCtx) return;
+  const t0 = audioCtx.currentTime;
+  [440, 349, 262].forEach((f, i) => {
+    const t = t0 + i * 0.14;
+    const o = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    o.type = 'sine';
+    o.frequency.setValueAtTime(f, t);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.11, t + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.18);
+    o.connect(g); g.connect(masterGain);
+    o.start(t); o.stop(t + 0.22);
+  });
+}
+
+/* ============================================================
+   震动
+   ============================================================ */
+function vibrate(pattern) {
+  if (!hapticOn) return;
+  if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
+    try { navigator.vibrate(pattern); } catch (e) {}
+  }
+}
+
+/* ============================================================
+   Three.js 场景
+   ============================================================ */
+const renderer = new THREE.WebGLRenderer({
+  canvas,
+  antialias: true,
+  alpha: false,
+  powerPreference: 'high-performance'
+});
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+renderer.setSize(window.innerWidth, window.innerHeight, false);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+
+const MAX_ANISO = renderer.capabilities.getMaxAnisotropy();
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x14141f);
+
+const camera = new THREE.PerspectiveCamera(CAM_FOV, 1, 0.1, 120);
+
+/* ---- 灯光 ---- */
+scene.add(new THREE.HemisphereLight(0xffffff, 0x3a3a52, 2.4));
+const keyLight = new THREE.DirectionalLight(0xffffff, 2.0);
+keyLight.position.set(4, 12, 7);
+scene.add(keyLight);
+const fillLight = new THREE.DirectionalLight(0x8fa8ff, 0.9);
+fillLight.position.set(-6, 5, -6);
+scene.add(fillLight);
+
+/* ============================================================
+   几何体工具：圆角方块（沿 Y 轴厚度）
+   ============================================================ */
+function makeRoundedBoxGeometry(w, h, d, r) {
+  const sw = Math.max(w - 2 * r, 0.001);
+  const sh = Math.max(h - 2 * r, 0.001);
+  const sd = Math.max(d - 2 * r, 0.001);
+
+  const shape = new THREE.Shape();
+  shape.moveTo(-sw / 2, -sh / 2);
+  shape.lineTo( sw / 2, -sh / 2);
+  shape.lineTo( sw / 2,  sh / 2);
+  shape.lineTo(-sw / 2,  sh / 2);
+  shape.closePath();
+
+  const UVGenerator = {
+    generateTopUV(geometry, vertices, iA, iB, iC) {
+      return [iA, iB, iC].map(i => new THREE.Vector2(
+        vertices[i * 3]     / sw + 0.5,
+        vertices[i * 3 + 1] / sh + 0.5
+      ));
+    },
+    generateSideWallUV() {
+      return [
+        new THREE.Vector2(0, 0), new THREE.Vector2(0, 0),
+        new THREE.Vector2(0, 0), new THREE.Vector2(0, 0)
+      ];
+    }
+  };
+
+  const geo = new THREE.ExtrudeGeometry(shape, {
+    depth: sd,
+    bevelEnabled: true,
+    bevelSegments: 3,
+    steps: 1,
+    bevelSize: r,
+    bevelThickness: r,
+    curveSegments: 4,
+    UVGenerator
+  });
+
+  geo.rotateX(-Math.PI / 2);
+  geo.center();
+  return geo;
+}
+
+/* ============================================================
+   牌面贴图 / 材质缓存
+   ============================================================ */
+const texCache = new Map();
+const matCache = new Map();
+
+function getNumberTexture(value) {
+  if (texCache.has(value)) return texCache.get(value);
+
+  const c = COLORS[value] || DEFAULT_COLOR;
+  const S = 256;
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = S;
+  const ctx = cv.getContext('2d');
+
+  ctx.fillStyle = c.top;
+  ctx.fillRect(0, 0, S, S);
+
+  const text = String(value);
+  let fs;
+  if (text.length <= 2)      fs = 132;
+  else if (text.length === 3) fs = 104;
+  else if (text.length === 4) fs = 82;
+  else                        fs = 62;
+
+  ctx.fillStyle = c.text;
+  ctx.font = `700 ${fs}px -apple-system,BlinkMacSystemFont,"PingFang SC","Helvetica Neue",Arial,sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, S / 2, S / 2 + fs * 0.035);
+
+  const tex = new THREE.CanvasTexture(cv);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = MAX_ANISO;
+  tex.minFilter = THREE.LinearMipmapLinearFilter;
+  tex.magFilter = THREE.LinearFilter;
+  tex.needsUpdate = true;
+
+  texCache.set(value, tex);
+  return tex;
+}
+
+function getTileMaterials(value) {
+  if (matCache.has(value)) return matCache.get(value);
+
+  const c = COLORS[value] || DEFAULT_COLOR;
+
+  const topMat = new THREE.MeshStandardMaterial({
+    map: getNumberTexture(value),
+    roughness: 0.72,
+    metalness: 0.0
+  });
+
+  const sideMat = new THREE.MeshStandardMaterial({
+    color: new THREE.Color(c.side),
+    roughness: 0.82,
+    metalness: 0.0
+  });
+
+  const mats = [topMat, sideMat]; // ExtrudeGeometry: group0 = 顶/底, group1 = 侧面
+  matCache.set(value, mats);
+  return mats;
+}
+
+/* ============================================================
+   棋盘
+   ============================================================ */
+const boardGroup = new THREE.Group();
+scene.add(boardGroup);
+
+// 底板
+const baseGeo = makeRoundedBoxGeometry(BOARD_SIZE, BOARD_SIZE, 0.34, 0.09);
+const baseMat = new THREE.MeshStandardMaterial({ color: 0x2a2a3e, roughness: 0.88, metalness: 0.08 });
+const baseMesh = new THREE.Mesh(baseGeo, baseMat);
+baseMesh.position.y = -0.17;
+boardGroup.add(baseMesh);
+
+// 格子凹槽
+const slotGeo = makeRoundedBoxGeometry(TILE_SIZE * 0.94, TILE_SIZE * 0.94, SLOT_H, 0.02);
+const slotMat = new THREE.MeshStandardMaterial({ color: 0x1d1d2b, roughness: 0.95, metalness: 0.0 });
+
+for (let r = 0; r < GRID_SIZE; r++) {
+  for (let c = 0; c < GRID_SIZE; c++) {
+    const m = new THREE.Mesh(slotGeo, slotMat);
+    m.position.set((c - 1.5) * SPACING, SLOT_H / 2, (r - 1.5) * SPACING);
+    boardGroup.add(m);
+  }
+}
+
+// 方块几何体（共享）
+const tileGeo = makeRoundedBoxGeometry(TILE_SIZE, TILE_SIZE, TILE_HEIGHT, TILE_RADIUS);
+
+/* ============================================================
+   相机自适应
+   ============================================================ */
+function updateCamera() {
+  const w = Math.max(window.innerWidth, 1);
+  const h = Math.max(window.innerHeight, 1);
+  const aspect = w / h;
+  const tanHalf = Math.tan(CAM_FOV * Math.PI / 360);
+
+  const margin = 1.08;
+  const needHalfW = BOARD_HALF * margin;
+  const needHalfH = BOARD_HALF * margin * Math.sin(CAM_ELEV) + 0.55;
+
+  const distW = needHalfW / (tanHalf * aspect);
+  const distH = needHalfH / tanHalf;
+  const dist  = Math.max(distW, distH, 6);
+
+  camera.aspect = aspect;
+  camera.fov = CAM_FOV;
+  camera.position.set(0, dist * Math.sin(CAM_ELEV), dist * Math.cos(CAM_ELEV));
+  camera.lookAt(0, 0, 0);
+  camera.updateProjectionMatrix();
+
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  renderer.setSize(w, h, false);
+}
+
+function onResize() { updateCamera(); }
+window.addEventListener('resize', onResize);
+window.addEventListener('orientationchange', () => setTimeout(onResize, 220));
+if (window.visualViewport) window.visualViewport.addEventListener('resize', onResize);
+
+/* ============================================================
+   游戏状态
+   ============================================================ */
+let grid = [];
+let activeTiles = new Set();
+let tileIdCounter = 0;
+let score = 0;
+let gameOver = false;
+let won = false;
+let busy = false;
+let gameId = 0;
+
+function emptyGrid() {
+  return Array.from({ length: GRID_SIZE }, () => new Array(GRID_SIZE).fill(null));
+}
+
+function cellPos(r, c) {
+  return {
+    x: (c - 1.5) * SPACING,
+    z: (r - 1.5) * SPACING
+  };
+}
+
+function addTile(r, c, value, isNew) {
+  const mesh = new THREE.Mesh(tileGeo, getTileMaterials(value));
+  const p = cellPos(r, c);
+  mesh.position.set(p.x, TILE_Y, p.z);
+  boardGroup.add(mesh);
+
+  const tile = {
+    id: ++tileIdCounter,
+    value, r, c,
+    mesh,
+    anim: null,
+    spawn: null,
+    pop: null
+  };
+
+  grid[r][c] = tile;
+  activeTiles.add(tile);
+
+  if (isNew) {
+    mesh.scale.setScalar(0.001);
+    tile.spawn = { start: performance.now(), dur: 200 };
+  }
+
+  return tile;
+}
+
+function removeTileMesh(tile) {
+  boardGroup.remove(tile.mesh);
+  activeTiles.delete(tile);
+  tile.anim = null;
+  tile.spawn = null;
+  tile.pop = null;
+}
+
+/* ============================================================
+   动画更新
+   ============================================================ */
+function easeOutCubic(x) { return 1 - Math.pow(1 - x, 3); }
+function easeOutBack(x) {
+  const c1 = 1.70158, c3 = c1 + 1;
+  return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2);
+}
+
+function updateTiles(now) {
+  for (const tile of activeTiles) {
+    const m = tile.mesh;
+
+    if (tile.anim) {
+      const k = Math.min((now - tile.anim.start) / tile.anim.dur, 1);
+      const e = easeOutCubic(k);
+      m.position.x = tile.anim.fromX + (tile.anim.toX - tile.anim.fromX) * e;
+      m.position.z = tile.anim.fromZ + (tile.anim.toZ - tile.anim.fromZ) * e;
+      m.position.y = TILE_Y + Math.sin(Math.PI * k) * 0.10;
+      if (k >= 1) {
+        m.position.set(tile.anim.toX, TILE_Y, tile.anim.toZ);
+        tile.anim = null;
+      }
+    }
+
+    if (tile.spawn) {
+      const k = Math.min((now - tile.spawn.start) / tile.spawn.dur, 1);
+      const e = easeOutBack(k);
+      m.scale.setScalar(Math.max(0.001, e));
+      if (k >= 1) { m.scale.setScalar(1); tile.spawn = null; }
+    }
+
+    if (tile.pop) {
+      const k = Math.min((now - tile.pop.start) / tile.pop.dur, 1);
+      m.scale.setScalar(1 + Math.sin(Math.PI * k) * 0.22);
+      if (k >= 1) { m.scale.setScalar(1); tile.pop = null; }
+    }
+  }
+}
+
+/* ============================================================
+   核心：移动
+   ============================================================ */
+function move(dir) {
+  if (busy || gameOver) return;
+
+  // 构建各条处理线（按移动目标方向排序）
+  const lines = [];
+  if (dir === 'left') {
+    for (let r = 0; r < GRID_SIZE; r++) {
+      const l = [];
+      for (let c = 0; c < GRID_SIZE; c++) l.push([r, c]);
+      lines.push(l);
+    }
+  } else if (dir === 'right') {
+    for (let r = 0; r < GRID_SIZE; r++) {
+      const l = [];
+      for (let c = GRID_SIZE - 1; c >= 0; c--) l.push([r, c]);
+      lines.push(l);
+    }
+  } else if (dir === 'up') {
+    for (let c = 0; c < GRID_SIZE; c++) {
+      const l = [];
+      for (let r = 0; r < GRID_SIZE; r++) l.push([r, c]);
+      lines.push(l);
+    }
+  } else {
+    for (let c = 0; c < GRID_SIZE; c++) {
+      const l = [];
+      for (let r = GRID_SIZE - 1; r >= 0; r--) l.push([r, c]);
+      lines.push(l);
+    }
+  }
+
+  const now = performance.now();
+  const newGrid = emptyGrid();
+  const merges = [];
+  let moved = false;
+
+  for (const line of lines) {
+    const items = [];
+    for (const [r, c] of line) {
+      const t = grid[r][c];
+      if (t) items.push(t);
+    }
+    if (!items.length) continue;
+
+    // 压缩 + 合并判定
+    const entries = [];
+    for (const t of items) {
+      const last = entries[entries.length - 1];
+      if (last && !last.mergeWith && last.value === t.value) {
+        last.mergeWith = t;
+      } else {
+        entries.push({ tile: t, value: t.value, mergeWith: null });
+      }
+    }
+
+    entries.forEach((entry, k) => {
+      const [tr, tc] = line[k];
+      const t = entry.tile;
+      const to = cellPos(tr, tc);
+
+      if (t.r !== tr || t.c !== tc) {
+        moved = true;
+        const from = cellPos(t.r, t.c);
+        t.anim = {
+          fromX: from.x, fromZ: from.z,
+          toX: to.x,   toZ: to.z,
+          start: now, dur: MOVE_DUR
+        };
+      }
+
+      t.r = tr; t.c = tc;
+      newGrid[tr][tc] = t;
+
+      if (entry.mergeWith) {
+        moved = true;
+        const o = entry.mergeWith;
+        const ofrom = cellPos(o.r, o.c);
+        o.anim = {
+          fromX: ofrom.x, fromZ: ofrom.z,
+          toX: to.x,     toZ: to.z,
+          start: now, dur: MOVE_DUR
+        };
+        o.r = tr; o.c = tc;
+        merges.push({ main: t, other: o, value: entry.value * 2 });
+      }
+    });
+  }
+
+  if (!moved) return;
+
+  grid = newGrid;
+  busy = true;
+
+  sfxSlide();
+  vibrate(8);
+
+  const myGame = gameId;
+
+  setTimeout(() => {
+    if (myGame !== gameId) return;
+
+    let gained = 0;
+    let maxVal = 0;
+
+    for (const m of merges) {
+      removeTileMesh(m.other);
+      m.main.value = m.value;
+      m.main.mesh.material = getTileMaterials(m.value);
+      m.main.pop = { start: performance.now(), dur: 220 };
+      gained += m.value;
+      if (m.value > maxVal) maxVal = m.value;
+      if (m.value === 2048 && !won) {
+        won = true;
+        showToast('2048 达成！');
+      }
+    }
+
+    if (gained > 0) {
+      score += gained;
+      updateScoreUI();
+      sfxMerge(maxVal);
+      vibrate(merges.length > 1 ? [12, 26, 12] : 16);
+    }
+
+    setTimeout(() => {
+      if (myGame !== gameId) return;
+      addRandomTile();
+      busy = false;
+      checkGameOver();
+    }, 70);
+
+  }, MOVE_DUR);
+}
+
+/* ============================================================
+   生成 / 结束判定
+   ============================================================ */
+function addRandomTile() {
+  const empties = [];
+  for (let r = 0; r < GRID_SIZE; r++)
+    for (let c = 0; c < GRID_SIZE; c++)
+      if (!grid[r][c]) empties.push([r, c]);
+
+  if (!empties.length) return null;
+
+  const [r, c] = empties[(Math.random() * empties.length) | 0];
+  const value = Math.random() < 0.9 ? 2 : 4;
+  const t = addTile(r, c, value, true);
+  sfxSpawn();
+  return t;
+}
+
+function hasMovesLeft() {
+  for (let r = 0; r < GRID_SIZE; r++) {
+    for (let c = 0; c < GRID_SIZE; c++) {
+      const t = grid[r][c];
+      if (!t) return true;
+      if (c < GRID_SIZE - 1) {
+        const n = grid[r][c + 1];
+        if (n && n.value === t.value) return true;
+      }
+      if (r < GRID_SIZE - 1) {
+        const n = grid[r + 1][c];
+        if (n && n.value === t.value) return true;
+      }
+    }
+  }
+  return false;
+}
+
+function checkGameOver() {
+  if (hasMovesLeft()) return;
+  gameOver = true;
+  sfxGameOver();
+  vibrate([60, 60, 130]);
+  setTimeout(() => {
+    showOverlay('游戏结束', score);
+  }, 260);
+}
+
+/* ============================================================
+   UI
+   ============================================================ */
+function updateScoreUI() {
+  scoreEl.textContent = score;
+  if (score > best) {
+    best = score;
+    lsSet('g2048.best', String(best));
+  }
+  bestEl.textContent = best;
+}
+
+function showOverlay(title, finalScore) {
+  ovTitle.textContent = title;
+  ovScore.textContent = finalScore;
+  overlay.classList.add('show');
+}
+
+function hideOverlay() {
+  overlay.classList.remove('show');
+}
+
+let toastTimer = 0;
+function showToast(text) {
+  toastEl.textContent = text;
+  toastEl.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toastEl.classList.remove('show'), 1400);
+}
+
+function updateToggleUI() {
+  btnSound.classList.toggle('on', soundOn);
+  btnSound.classList.toggle('off', !soundOn);
+  btnHaptic.classList.toggle('on', hapticOn);
+  btnHaptic.classList.toggle('off', !hapticOn);
+}
+
+/* ============================================================
+   重开
+   ============================================================ */
+function resetGame() {
+  gameId++;
+  busy = false;
+
+  for (const t of activeTiles) boardGroup.remove(t.mesh);
+  activeTiles.clear();
+
+  grid = emptyGrid();
+  score = 0;
+  gameOver = false;
+  won = false;
+
+  updateScoreUI();
+  hideOverlay();
+
+  addRandomTile();
+  addRandomTile();
+}
+
+/* ============================================================
+   输入处理
+   ============================================================ */
+let touchStart = null;
+let mouseStart = null;
+
+function handleSwipe(dx, dy) {
+  const adx = Math.abs(dx);
+  const ady = Math.abs(dy);
+  if (Math.max(adx, ady) < SWIPE_MIN) return;
+
+  if (adx > ady) move(dx > 0 ? 'right' : 'left');
+  else           move(dy > 0 ? 'down'  : 'up');
+}
+
+// --- 触摸 ---
+function onTouchStart(e) {
+  unlockAudio();
+  if (e.touches.length !== 1) { touchStart = null; return; }
+  const t = e.touches[0];
+  touchStart = { x: t.clientX, y: t.clientY };
+}
+
+function onTouchMove(e) {
+  if (touchStart && e.cancelable) e.preventDefault();
+}
+
+function onTouchEnd(e) {
+  if (!touchStart) return;
+  const t = e.changedTouches[0];
+  const dx = t.clientX - touchStart.x;
+  const dy = t.clientY - touchStart.y;
+  touchStart = null;
+  handleSwipe(dx, dy);
+}
+
+appEl.addEventListener('touchstart', onTouchStart, { passive: true });
+appEl.addEventListener('touchmove',  onTouchMove,  { passive: false });
+appEl.addEventListener('touchend',   onTouchEnd,   { passive: true });
+appEl.addEventListener('touchcancel', () => { touchStart = null; }, { passive: true });
+
+// --- 鼠标（桌面调试） ---
+appEl.addEventListener('mousedown', e => {
+  unlockAudio();
+  mouseStart = { x: e.clientX, y: e.clientY };
+});
+window.addEventListener('mouseup', e => {
+  if (!mouseStart) return;
+  const dx = e.clientX - mouseStart.x;
+  const dy = e.clientY - mouseStart.y;
+  mouseStart = null;
+  handleSwipe(dx, dy);
+});
+
+// --- 键盘 ---
+const KEY_MAP = {
+  ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right',
+  w: 'up', s: 'down', a: 'left', d: 'right',
+  W: 'up', S: 'down', A: 'left', D: 'right'
+};
+
+window.addEventListener('keydown', e => {
+  const dir = KEY_MAP[e.key];
+  if (!dir) return;
+  e.preventDefault();
+  unlockAudio();
+  move(dir);
+}, { passive: false });
+
+/* ============================================================
+   按钮事件
+   ============================================================ */
+btnSound.addEventListener('click', () => {
+  soundOn = !soundOn;
+  lsSet('g2048.sound', soundOn ? '1' : '0');
+  updateToggleUI();
+  unlockAudio();
+  if (soundOn) sfxSpawn();
+});
+
+btnHaptic.addEventListener('click', () => {
+  hapticOn = !hapticOn;
+  lsSet('g2048.haptic', hapticOn ? '1' : '0');
+  updateToggleUI();
+  vibrate(24);
+});
+
+btnRestart.addEventListener('click', () => {
+  unlockAudio();
+  resetGame();
+});
+
+btnNew.addEventListener('click', () => {
+  unlockAudio();
+  resetGame();
+});
+
+overlay.addEventListener('click', e => {
+  if (e.target === overlay) hideOverlay();
+});
+
+/* ============================================================
+   渲染循环
+   ============================================================ */
+function loop() {
+  requestAnimationFrame(loop);
+  updateTiles(performance.now());
+  renderer.render(scene, camera);
+}
+
+/* ============================================================
+   启动
+   ============================================================ */
+function boot() {
+  updateCamera();
+  updateToggleUI();
+
+  grid = emptyGrid();
+  updateScoreUI();
+
+  resetGame();
+
+  loop();
+
+  requestAnimationFrame(() => {
+    loadingEl.classList.add('hide');
+    setTimeout(() => { loadingEl.style.display = 'none'; }, 420);
+  });
+}
+
+boot();
+
+/* 防止微信下拉刷新 / 回弹 */
+document.addEventListener('touchmove', e => {
+  if (e.touches.length > 1) e.preventDefault();
+}, { passive: false });
+
+document.addEventListener('gesturestart', e => e.preventDefault());
+</script>
+</body>
+</html>
